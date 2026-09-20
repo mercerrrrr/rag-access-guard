@@ -1,0 +1,88 @@
+# Public documentation boundary
+*.md
+!/README.md
+
+# Private and generated material
+/docs/
+/private/
+/planning/
+/research/
+/artifacts/
+/results/
+/reports/
+/runs/
+/logs/
+*.log
+
+# Secrets and local configuration
+.env
+.env.*
+!/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets.*
+
+# Python
+.python-version.local
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.basedpyright/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# JavaScript and Vite
+node_modules/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Runtime data
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+postgres-data/
+tmp/
+temp/
+
+# Models and numerical caches
+.cache/
+models/
+model-cache/
+huggingface/
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+*.pth
+*.npy
+*.npz
+
+# Office and research files
+*.doc
+*.docx
+*.odt
+*.pdf
+*.ppt
+*.pptx
+*.xls
+*.xlsx
