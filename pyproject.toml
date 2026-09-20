@@ -1,0 +1,70 @@
+[project]
+name = "rag-access-guard-workspace"
+version = "0.1.0"
+description = "Workspace for the RAG Access Guard prototype"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "rag-access-guard-api",
+]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.31,<2",
+    "httpx2[brotli,http2,zstd]>=2.13,<3",
+    "pytest>=8.4,<9",
+    "ruff>=0.12,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+rag-access-guard-api = { workspace = true }
+
+[tool.uv.workspace]
+members = ["apps/api"]
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.13"
+pythonPlatform = "All"
+include = ["apps/api/src", "tests"]
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
+reportUnusedCallResult = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnusedVariable = "error"
+reportMissingParameterType = "error"
+reportPrivateUsage = "error"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["apps/api/src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "CPY001",
+    "D203",
+    "D213",
+    "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG", "D", "INP001", "PLR2004", "S101", "SLF001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+filterwarnings = ["error"]

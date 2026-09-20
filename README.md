@@ -10,4 +10,38 @@
 
 ## Статус
 
-Создано основание проекта. Исполняемые компоненты, команды запуска и проверенные сценарии будут добавляться последовательно по мере реализации.
+Реализован базовый FastAPI-сервис с проверкой состояния процесса:
+
+```text
+GET /api/health/live
+```
+
+Ответ:
+
+```json
+{"status":"ok"}
+```
+
+## Локальный запуск
+
+Требуется установленный `uv`. Версия Python 3.13.15 закреплена в `.python-version`, зависимости проекта — в `uv.lock`.
+
+```shell
+uv sync --frozen
+uv run uvicorn rag_access_guard_api.main:app --host 127.0.0.1 --port 8000
+```
+
+После запуска:
+
+```shell
+curl http://127.0.0.1:8000/api/health/live
+```
+
+## Проверки
+
+```shell
+uv run ruff format --check .
+uv run ruff check .
+uv run basedpyright
+uv run pytest
+```
