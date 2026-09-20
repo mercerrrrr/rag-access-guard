@@ -10,13 +10,17 @@
 
 ## Статус
 
-Реализован базовый FastAPI-сервис с проверкой состояния процесса:
+Реализован базовый FastAPI-сервис с двумя проверками состояния:
 
 ```text
 GET /api/health/live
+GET /api/health/ready
 ```
 
-Ответ:
+`live` подтверждает работу процесса. `ready` возвращает успешный ответ только
+для PostgreSQL 18 с pgvector 0.8.6 и актуальной ревизией Alembic.
+
+Успешный ответ:
 
 ```json
 {"status":"ok"}
@@ -24,22 +28,31 @@ GET /api/health/live
 
 ## Локальный запуск
 
-Требуется установленный `uv`. Версия Python 3.13.15 закреплена в `.python-version`, зависимости проекта — в `uv.lock`.
+Требуются `uv` и Docker Desktop в режиме Linux-контейнеров. Версия Python
+3.13.15 закреплена в `.python-version`, зависимости проекта — в `uv.lock`.
 
-```shell
+Локальные значения из `.env.example` предназначены только для разработки.
+
+```powershell
+Copy-Item .env.example .env
 uv sync --frozen
-uv run uvicorn rag_access_guard_api.main:app --host 127.0.0.1 --port 8000
+docker compose up --detach --wait postgres
+uv run --env-file .env alembic -c apps/api/alembic.ini upgrade head
+uv run --env-file .env rag-access-guard-api
 ```
 
 После запуска:
 
-```shell
-curl http://127.0.0.1:8000/api/health/live
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/health/live
+Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 ```
 
 ## Проверки
 
 ```shell
+uv lock --check
+uv sync --frozen
 uv run ruff format --check .
 uv run ruff check .
 uv run basedpyright
