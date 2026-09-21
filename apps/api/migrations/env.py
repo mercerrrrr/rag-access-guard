@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from rag_access_guard_api.config import Settings
+from rag_access_guard_api.persistence import Base
 
 
 def database_url() -> str:
@@ -15,7 +16,8 @@ def run_migrations_offline() -> None:
     """Run migrations without creating a database connection."""
     context.configure(
         url=database_url(),
-        target_metadata=None,
+        target_metadata=Base.metadata,
+        compare_server_default=True,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -29,7 +31,9 @@ def run_migrations_online() -> None:
     engine = create_engine(database_url(), poolclass=pool.NullPool)
     try:
         with engine.connect() as connection:
-            context.configure(connection=connection, target_metadata=None)
+            context.configure(
+                connection=connection, target_metadata=Base.metadata, compare_server_default=True
+            )
             with context.begin_transaction():
                 context.run_migrations()
     finally:

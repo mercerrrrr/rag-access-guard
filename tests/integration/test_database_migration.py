@@ -27,7 +27,7 @@ def test_initial_migration_installs_required_database_baseline(
 
     # When
     try:
-        command.upgrade(migration_config, "head")
+        command.upgrade(migration_config, "0001_pgvector")
         with engine.connect() as connection:
             row = (
                 connection.execute(

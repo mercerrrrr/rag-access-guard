@@ -2,6 +2,8 @@ from http import HTTPStatus
 from typing import ClassVar, Literal
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 
@@ -20,6 +22,16 @@ class ExpectedReadyHealth(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
 
     status: Literal["ok"]
+
+
+def test_reports_unavailable_before_access_schema_migration(
+    isolated_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RAG_ACCESS_GUARD_DATABASE_URL", isolated_database_url)
+    command.upgrade(Config("apps/api/alembic.ini"), "0001_pgvector")
+    with TestClient(create_app(), backend_options={"loop_factory": create_event_loop}) as client:
+        response = client.get("/api/health/ready")
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
 
 def test_reports_unavailable_when_database_cannot_be_reached(
