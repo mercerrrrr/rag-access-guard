@@ -1,0 +1,96 @@
+@media (max-width: 63.99rem) {
+  .app-shell--with-context {
+    grid-template-areas:
+      "sidebar header"
+      "sidebar main"
+      "sidebar context";
+    grid-template-rows:
+      var(--size-header)
+      minmax(0, 1fr)
+      minmax(var(--size-context-compact), auto);
+    grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+  }
+
+  .context-rail {
+    max-block-size: var(--size-context-compact);
+    border-block-start: var(--border-size-thin) solid var(--color-border);
+    border-inline-start: 0;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .app-shell,
+  .app-shell--with-context {
+    grid-template-areas:
+      "header"
+      "sidebar"
+      "main"
+      "context";
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    max-block-size: none;
+    overflow: visible;
+  }
+
+  .sidebar {
+    border-block-end: var(--border-size-thin) solid var(--color-border);
+    border-inline-end: 0;
+  }
+
+  .sidebar__top,
+  .sidebar__caption,
+  .navigation-icon {
+    display: none;
+  }
+
+  .navigation {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    padding-block: 0;
+  }
+
+  .navigation__link {
+    min-inline-size: 0;
+    justify-content: center;
+    gap: 0;
+    padding-inline: var(--space-1);
+    border-radius: 0;
+    font-size: var(--font-size-label);
+  }
+
+  .navigation__link::before {
+    inset-block: auto 0;
+    inset-inline: 0;
+    inline-size: auto;
+    block-size: var(--size-active-indicator);
+  }
+
+  .utility-header {
+    min-block-size: var(--size-header);
+    padding-inline: var(--space-4);
+  }
+
+  .utility-header__title {
+    font-size: var(--font-size-section);
+    line-height: var(--line-height-section);
+  }
+
+  .utility-header__meta {
+    display: none;
+  }
+
+  .app-main {
+    overflow: visible;
+  }
+
+  .context-rail {
+    max-block-size: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link,
+  .navigation__link {
+    transition-duration: 0.01ms;
+  }
+}

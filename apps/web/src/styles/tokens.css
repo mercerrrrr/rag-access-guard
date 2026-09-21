@@ -1,0 +1,66 @@
+:root {
+  color-scheme: light;
+
+  --color-canvas: #f7f8fa;
+  --color-surface-primary: #ffffff;
+  --color-sidebar: #f1f4f8;
+  --color-surface-subtle: #e8edf4;
+  --color-accent-subtle: #e3eefb;
+  --color-text-primary: #172033;
+  --color-text-secondary: #667085;
+  --color-accent: #1f5faf;
+  --color-accent-hover: #174f91;
+  --color-danger: #b42318;
+  --color-border: #d8dee8;
+  --color-focus-inset: #ffffff;
+
+  --font-family-primary: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-family-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas,
+    monospace;
+  --font-size-caption: 0.75rem;
+  --font-size-label: 0.875rem;
+  --font-size-body: 1rem;
+  --font-size-section: 1.25rem;
+  --font-size-title: 1.5rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-caption: 1rem;
+  --line-height-label: 1.25rem;
+  --line-height-body: 1.5;
+  --line-height-section: 1.75rem;
+  --line-height-title: 2rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-control: 0.375rem;
+  --radius-surface: 0.5rem;
+  --border-size-thin: 0.0625rem;
+  --size-active-indicator: 0.25rem;
+  --size-context: 20rem;
+  --size-context-compact: 12rem;
+  --size-focus-ring: 0.125rem;
+  --size-header: 4rem;
+  --size-icon: 1.5rem;
+  --size-sidebar: 15rem;
+  --size-swatch: 9rem;
+  --size-target: 3.5rem;
+  --measure-compact: 30ch;
+  --measure-content: 44rem;
+  --measure-reading: 65ch;
+
+  --duration-micro: 120ms;
+  --easing-standard: ease-out;
+  --z-focus: 1;
+  --z-skip-link: 10;
+
+  --colorBrandBackground: var(--color-accent);
+  --colorBrandBackgroundHover: var(--color-accent-hover);
+  --colorNeutralStroke2: var(--color-border);
+}

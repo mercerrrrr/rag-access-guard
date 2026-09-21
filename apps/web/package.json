@@ -1,0 +1,44 @@
+{
+  "name": "@rag-access-guard/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "lint": "eslint . --max-warnings 0",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc -b --force --pretty false"
+  },
+  "dependencies": {
+    "@fluentui/tokens": "1.0.0-alpha.24",
+    "@fluentui/web-components": "3.1.3",
+    "@microsoft/fast-element": "3.0.3",
+    "@microsoft/focusgroup-polyfill": "1.6.0",
+    "vue": "3.5.43",
+    "vue-router": "4.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.6",
+    "@vitejs/plugin-vue": "6.0.9",
+    "@vue/compiler-sfc": "3.5.43",
+    "@vue/test-utils": "2.5.1",
+    "eslint": "10.11.0",
+    "eslint-plugin-vue": "10.11.0",
+    "jsdom": "30.1.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vite": "8.3.0",
+    "vitest": "5.0.1",
+    "vue-eslint-parser": "10.4.1",
+    "vue-tsc": "3.3.11"
+  }
+}

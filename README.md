@@ -10,7 +10,11 @@
 
 ## Статус
 
-Реализован базовый FastAPI-сервис с двумя проверками состояния:
+Реализованы базовый FastAPI-сервис и адаптивная оболочка веб-приложения.
+Интерфейс содержит разделы `Чат`, `Документы`, `Доступ` и `Аудит`; предметные
+операции в них появятся на следующих этапах.
+
+Сервис предоставляет две проверки состояния:
 
 ```text
 GET /api/health/live
@@ -26,7 +30,7 @@ GET /api/health/ready
 {"status":"ok"}
 ```
 
-## Локальный запуск
+## Локальный запуск API
 
 Требуются `uv` и Docker Desktop в режиме Linux-контейнеров. Версия Python
 3.13.15 закреплена в `.python-version`, зависимости проекта — в `uv.lock`.
@@ -48,6 +52,17 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health/live
 Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 ```
 
+## Локальный запуск интерфейса
+
+Требуются Node.js 24.21.0 и npm 11.19.0. Их точные версии закреплены в
+`.node-version` и `apps/web/package.json`.
+
+```powershell
+Set-Location apps/web
+npm ci
+npm run dev
+```
+
 ## Проверки
 
 ```shell
@@ -57,4 +72,11 @@ uv run ruff format --check .
 uv run ruff check .
 uv run basedpyright
 uv run pytest
+
+Set-Location apps/web
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
