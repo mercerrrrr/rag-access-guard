@@ -65,6 +65,10 @@ npm run dev
 
 ## Проверки
 
+GitHub Actions выполняет эти проверки из чистого checkout в независимых
+заданиях для Python/API и интерфейса, включая HTTP-пробы серверной точки
+входа и production preview собранного интерфейса.
+
 ```shell
 uv lock --check
 uv sync --frozen

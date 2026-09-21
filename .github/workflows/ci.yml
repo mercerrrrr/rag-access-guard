@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-api:
+    name: Python and API
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: rag-access-guard-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_DB: rag_access_guard
+      POSTGRES_PASSWORD: ci-only-not-a-secret
+      POSTGRES_PORT: "55432"
+      POSTGRES_USER: rag_guard
+      RAG_ACCESS_GUARD_DATABASE_URL: postgresql+psycopg://rag_guard:ci-only-not-a-secret@127.0.0.1:55432/rag_access_guard
+
+    steps:
+      - name: Check out repository with checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install uv and Python with setup-uv v10.1.0
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+        with:
+          enable-cache: false
+          python-version: "3.13.15"
+          version: "0.12.17"
+
+      - name: Verify toolchain versions
+        run: |
+          uv --version | grep --extended-regexp '^uv 0\.12\.17( |$)'
+          test "$(uv run --no-project python -c 'import platform; print(platform.python_version())')" = "3.13.15"
+
+      - name: Validate and install locked dependencies
+        run: |
+          uv lock --check
+          uv sync --frozen
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Start PostgreSQL
+        run: docker compose up --detach --wait postgres
+
+      - name: Apply database migrations
+        run: uv run --frozen alembic -c apps/api/alembic.ini upgrade head
+
+      - name: Run Python checks and tests
+        run: |
+          uv run --frozen ruff format --check .
+          uv run --frozen ruff check .
+          uv run --frozen basedpyright
+          uv run --frozen pytest
+
+      - name: Build Python package
+        run: uv build --package rag-access-guard-api
+
+      - name: Smoke-test API entry point
+        run: |
+          set -euo pipefail
+          uv run --frozen rag-access-guard-api >"${RUNNER_TEMP}/api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "${api_pid}" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/health/live >/dev/null; then
+              break
+            fi
+            if ! kill -0 "${api_pid}" 2>/dev/null; then
+              cat "${RUNNER_TEMP}/api.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          live_response="$(curl --fail --silent --show-error http://127.0.0.1:8000/api/health/live)"
+          ready_response="$(curl --fail --silent --show-error http://127.0.0.1:8000/api/health/ready)"
+          test "${live_response}" = '{"status":"ok"}'
+          test "${ready_response}" = '{"status":"ok"}'
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  web:
+    name: Web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/web
+
+    steps:
+      - name: Check out repository with checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Node.js with setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.21.0"
+
+      - name: Verify toolchain versions
+        run: |
+          test "$(node --version)" = "v24.21.0"
+          test "$(npm --version)" = "11.19.0"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run frontend checks and tests
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Smoke-test production frontend
+        run: |
+          set -euo pipefail
+          npm run preview -- --host 127.0.0.1 --port 4173 --strictPort >"${RUNNER_TEMP}/web.log" 2>&1 &
+          web_pid=$!
+          trap 'kill "${web_pid}" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/chat >"${RUNNER_TEMP}/web.html"; then
+              break
+            fi
+            if ! kill -0 "${web_pid}" 2>/dev/null; then
+              cat "${RUNNER_TEMP}/web.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:4173/chat >"${RUNNER_TEMP}/web.html"
+          grep --fixed-strings '<div id="app"></div>' "${RUNNER_TEMP}/web.html"
