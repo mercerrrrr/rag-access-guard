@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from typing import Final
@@ -12,6 +13,7 @@ from rag_access_guard_api.persistence import AuditEvent, PolicyState, User
 from rag_access_guard_api.services.passwords import verify_password
 
 SUBPROCESS_CREATION_FLAGS: Final = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+ANSI_CONTROL_SEQUENCE: Final[re.Pattern[str]] = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 CONTROLLED_STDIN_BOOTSTRAP: Final = (
     "import io, os, runpy, sys; "
     "sys.stdin = io.TextIOWrapper(os.fdopen(0, 'rb', closefd=False)); "
@@ -202,9 +204,10 @@ def test_create_user_cli_help_needs_no_runtime_configuration() -> None:
 
     # Then: argument documentation is available without loading runtime settings.
     assert result.returncode == 0, result.stderr
-    assert "--login" in result.stdout
-    assert "--display-name" in result.stdout
-    assert "--admin" in result.stdout
+    rendered_help = ANSI_CONTROL_SEQUENCE.sub("", result.stdout)
+    assert "--login" in rendered_help
+    assert "--display-name" in rendered_help
+    assert "--admin" in rendered_help
 
 
 def test_create_user_cli_database_failure_does_not_expose_password() -> None:
