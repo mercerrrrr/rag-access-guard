@@ -15,7 +15,7 @@ from rag_access_guard_api.config import (
     Settings,
 )
 
-EXPECTED_ALEMBIC_REVISION: Final = "0003_auth_challenges"
+EXPECTED_ALEMBIC_REVISION: Final = "0004_document_versions"
 EXPECTED_PGVECTOR_VERSION: Final = "0.8.6"
 EXPECTED_POSTGRESQL_MAJOR: Final = 18
 

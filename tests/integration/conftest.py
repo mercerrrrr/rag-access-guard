@@ -13,6 +13,7 @@ from sqlalchemy.engine import make_url
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.schemas.auth import CsrfResponse
+from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.server import create_event_loop
 from rag_access_guard_api.services.passwords import hash_password
 
@@ -61,6 +62,28 @@ def auth_database(auth_client: TestClient) -> Iterator[Engine]:
         yield engine
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def admin_client(authenticated_client: TestClient, auth_database: Engine) -> TestClient:
+    with auth_database.begin() as connection:
+        _ = connection.execute(text("UPDATE users SET is_admin = true WHERE login = 'reader'"))
+    return authenticated_client
+
+
+@pytest.fixture
+def registered_document(admin_client: TestClient) -> DocumentSummary:
+    response = admin_client.post(
+        "/api/admin/documents",
+        data={"title": "Synthetic"},
+        files={"file": ("example.txt", b"PROTECTED_SYNTHETIC", "text/plain")},
+        headers={
+            "Origin": "https://rag.test",
+            "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+        },
+    )
+    assert response.status_code == 201
+    return DocumentSummary.model_validate_json(response.content)
 
 
 @pytest.fixture

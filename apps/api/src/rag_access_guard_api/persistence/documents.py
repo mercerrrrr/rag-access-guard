@@ -4,7 +4,17 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Uuid, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_as_dataclass, mapped_column
 
 from rag_access_guard_api.persistence.base import Base
@@ -15,8 +25,15 @@ class Document:
     """Logical document identity; content and versions are stored separately."""
 
     __tablename__: ClassVar[str] = "documents"
-    __table_args__: ClassVar[tuple[CheckConstraint, ...]] = (
+    __table_args__: ClassVar[tuple[CheckConstraint | ForeignKeyConstraint, ...]] = (
         CheckConstraint("length(btrim(title)) > 0", name="ck_documents_title_nonblank"),
+        ForeignKeyConstraint(
+            ["id", "active_version_id"],
+            ["document_versions.document_id", "document_versions.id"],
+            name="fk_documents_active_version",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default_factory=uuid4)
@@ -28,6 +45,7 @@ class Document:
         DateTime(timezone=True), server_default=func.now(), init=False
     )
     is_active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
+    active_version_id: Mapped[UUID | None] = mapped_column(Uuid, default=None)
 
 
 @mapped_as_dataclass(Base.registry, kw_only=True)

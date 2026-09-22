@@ -1,4 +1,4 @@
-"""Sanitized authentication errors and cache policy at the HTTP boundary."""
+"""Sanitized protected API errors and cache policy at the HTTP boundary."""
 
 from typing import override
 
@@ -15,30 +15,31 @@ from rag_access_guard_api.services.errors import (
     RateLimitedError,
     UnauthenticatedError,
 )
+from rag_access_guard_api.services.text_documents import DocumentError
 
 
 class AuthCacheMiddleware(BaseHTTPMiddleware):
-    """Prevent caching auth successes and errors, including validation failures."""
+    """Prevent caching protected successes and errors, including validation failures."""
 
     @override
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Attach response policy after endpoint and exception processing."""
         response = await call_next(request)
-        if request.url.path.startswith("/api/auth/"):
+        if request.url.path.startswith(("/api/auth/", "/api/admin/documents")):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
         return response
 
 
 def register_auth_errors(app: FastAPI) -> None:
-    """Translate only known authentication failures without credential details."""
+    """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
         headers = (
             {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-            if request.url.path.startswith("/api/auth/")
+            if request.url.path.startswith(("/api/auth/", "/api/admin/documents"))
             else None
         )
         return JSONResponse(
@@ -73,3 +74,13 @@ def register_auth_errors(app: FastAPI) -> None:
     @app.exception_handler(SQLAlchemyError)
     async def unavailable(_request: Request, _: SQLAlchemyError) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": "Service unavailable"})
+
+    @app.exception_handler(DocumentError)
+    async def invalid_document(_request: Request, error: DocumentError) -> JSONResponse:
+        details = {
+            404: "Not found",
+            413: "Request too large",
+            415: "Unsupported media type",
+            422: "Invalid document",
+        }
+        return JSONResponse(status_code=error.status, content={"detail": details[error.status]})

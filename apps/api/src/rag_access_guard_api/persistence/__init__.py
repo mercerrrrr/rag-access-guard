@@ -7,6 +7,7 @@ from rag_access_guard_api.persistence.documents import Document, DocumentGrant
 from rag_access_guard_api.persistence.identity import Role, User, UserRole
 from rag_access_guard_api.persistence.policy import AuditEvent, PolicyState
 from rag_access_guard_api.persistence.session import Session
+from rag_access_guard_api.persistence.versions import DocumentVersion
 
 __all__ = [
     "AuditEvent",
@@ -15,6 +16,7 @@ __all__ = [
     "Base",
     "Document",
     "DocumentGrant",
+    "DocumentVersion",
     "PolicyState",
     "Role",
     "Session",

@@ -6,12 +6,16 @@ from typing import ClassVar, Final, Literal
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine, is_database_ready
 from rag_access_guard_api.routes.auth import build_auth_router
 from rag_access_guard_api.routes.auth_errors import register_auth_errors
+from rag_access_guard_api.routes.documents import build_documents_router
 from rag_access_guard_api.services.auth import AuthService
+from rag_access_guard_api.services.security import PolicyUnitOfWork
+from rag_access_guard_api.services.text_documents import MAX_UPLOAD_BYTES
 
 SERVICE_UNAVAILABLE_DETAIL: Final = "Service unavailable"
 
@@ -41,6 +45,8 @@ def create_app() -> FastAPI:
     application = FastAPI(title="RAG Access Guard API", lifespan=lifespan)
 
     application.include_router(build_auth_router(auth, settings))
+    application.include_router(build_documents_router(PolicyUnitOfWork(engine), settings))
+    application.add_middleware(RequestBodyLimitMiddleware, max_body_size=MAX_UPLOAD_BYTES)
     register_auth_errors(application)
 
     @application.get(
