@@ -4,6 +4,7 @@ requires-python = "==3.13.*"
 
 [manifest]
 members = [
+    "rag-access-guard",
     "rag-access-guard-api",
     "rag-access-guard-workspace",
 ]
@@ -611,6 +612,11 @@ wheels = [
 ]
 
 [[package]]
+name = "rag-access-guard"
+version = "0.1.0"
+source = { editable = "packages/rag_access_guard" }
+
+[[package]]
 name = "rag-access-guard-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
@@ -622,6 +628,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "rag-access-guard" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
@@ -636,6 +643,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
+    { name = "rag-access-guard", editable = "packages/rag_access_guard" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
     { name = "typer", specifier = ">=0.24,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.36,<1" },

@@ -1,0 +1,10 @@
+[project]
+name = "rag-access-guard"
+version = "0.1.0"
+description = "Provenance-aware access decisions for RAG hosts"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"

@@ -68,8 +68,16 @@ jobs:
           uv run --frozen basedpyright
           uv run --frozen pytest
 
-      - name: Build Python package
-        run: uv build --package rag-access-guard-api
+      - name: Build Python packages
+        run: |
+          uv build --package rag-access-guard-api
+          uv build --package rag-access-guard
+
+      - name: Verify standalone guard installation
+        run: |
+          uv venv "${RUNNER_TEMP}/guard-venv"
+          uv pip install --python "${RUNNER_TEMP}/guard-venv/bin/python" --no-deps dist/rag_access_guard-*.whl
+          "${RUNNER_TEMP}/guard-venv/bin/python" -I -c 'from importlib.util import find_spec; import rag_access_guard; assert find_spec("fastapi") is None; assert find_spec("sqlalchemy") is None; assert find_spec("rag_access_guard_api") is None'
 
       - name: Smoke-test API entry point
         run: |

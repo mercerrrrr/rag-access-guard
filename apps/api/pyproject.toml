@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI service for the RAG Access Guard prototype"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "rag-access-guard",
     "alembic>=1.16,<2",
     "anyio>=4.10,<4.15",
     "fastapi>=0.116,<1",
@@ -19,6 +20,9 @@ dependencies = [
 [project.scripts]
 rag-access-guard-api = "rag_access_guard_api.server:run"
 rag-access-guard-create-user = "rag_access_guard_api.cli.create_user:main"
+
+[tool.uv.sources]
+rag-access-guard = { workspace = true }
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]
