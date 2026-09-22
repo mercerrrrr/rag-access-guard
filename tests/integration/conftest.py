@@ -5,11 +5,62 @@ import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from psycopg import sql
-from sqlalchemy import Connection, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import make_url
 
 from rag_access_guard_api.config import Settings
+from rag_access_guard_api.main import create_app
+from rag_access_guard_api.schemas.auth import CsrfResponse
+from rag_access_guard_api.server import create_event_loop
+from rag_access_guard_api.services.passwords import hash_password
+
+
+@pytest.fixture
+def auth_client(
+    isolated_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    monkeypatch.setenv("RAG_ACCESS_GUARD_DATABASE_URL", isolated_database_url)
+    command.upgrade(Config("apps/api/alembic.ini"), "head")
+    engine = create_engine(isolated_database_url)
+    with engine.begin() as connection:
+        _ = connection.execute(
+            text(
+                """INSERT INTO users (id, login, display_name, password_hash)
+                VALUES (:id, 'reader', 'Reader', :hash)"""
+            ),
+            {"id": uuid4(), "hash": hash_password("Synthetic-Pass-123")},
+        )
+    engine.dispose()
+    with TestClient(
+        create_app(),
+        base_url="https://rag.test",
+        backend_options={"loop_factory": create_event_loop},
+    ) as client:
+        yield client
+
+
+@pytest.fixture
+def authenticated_client(auth_client: TestClient) -> TestClient:
+    csrf = CsrfResponse.model_validate_json(auth_client.get("/api/auth/csrf").content).csrf_token
+    response = auth_client.post(
+        "/api/auth/login",
+        json={"login": "reader", "password": "Synthetic-Pass-123"},
+        headers={"Origin": "https://rag.test", "X-CSRF-Token": csrf},
+    )
+    assert response.status_code == 200
+    return auth_client
+
+
+@pytest.fixture
+def auth_database(auth_client: TestClient) -> Iterator[Engine]:
+    assert auth_client.base_url.host == "rag.test"
+    engine = create_engine(str(Settings().database_url), hide_parameters=True)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture

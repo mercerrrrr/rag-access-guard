@@ -12,6 +12,8 @@ def test_access_schema_starts_without_accounts_or_grants(schema_connection: Conn
         "document_grants",
         "policy_state",
         "audit_events",
+        "auth_challenges",
+        "auth_rate_buckets",
     }
     assert schema_connection.execute(text("SELECT id, revision FROM policy_state")).one() == (1, 0)
     assert schema_connection.execute(text("SELECT count(*) FROM users")).scalar_one() == 0

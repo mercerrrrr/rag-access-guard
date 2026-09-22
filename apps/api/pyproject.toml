@@ -11,11 +11,14 @@ dependencies = [
     "pydantic-settings>=2.10,<3",
     "psycopg[binary]>=3.2,<4",
     "sqlalchemy[asyncio]>=2.0,<3",
+    "typer>=0.24,<1",
     "uvicorn[standard]>=0.36,<1",
+    "argon2-cffi>=25.1,<26",
 ]
 
 [project.scripts]
 rag-access-guard-api = "rag_access_guard_api.server:run"
+rag-access-guard-create-user = "rag_access_guard_api.cli.create_user:main"
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]

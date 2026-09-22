@@ -57,7 +57,9 @@ jobs:
         run: docker compose up --detach --wait postgres
 
       - name: Apply database migrations
-        run: uv run --frozen alembic -c apps/api/alembic.ini upgrade head
+        run: |
+          export RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET="$(uv run --frozen python -c 'import secrets; print(secrets.token_hex(32))')"
+          uv run --frozen alembic -c apps/api/alembic.ini upgrade head
 
       - name: Run Python checks and tests
         run: |
@@ -72,6 +74,7 @@ jobs:
       - name: Smoke-test API entry point
         run: |
           set -euo pipefail
+          export RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET="$(uv run --frozen python -c 'import secrets; print(secrets.token_hex(32))')"
           uv run --frozen rag-access-guard-api >"${RUNNER_TEMP}/api.log" 2>&1 &
           api_pid=$!
           trap 'kill "${api_pid}" 2>/dev/null || true' EXIT

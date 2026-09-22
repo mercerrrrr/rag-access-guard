@@ -15,7 +15,7 @@ from rag_access_guard_api.config import (
     Settings,
 )
 
-EXPECTED_ALEMBIC_REVISION: Final = "0002_access_control"
+EXPECTED_ALEMBIC_REVISION: Final = "0003_auth_challenges"
 EXPECTED_PGVECTOR_VERSION: Final = "0.8.6"
 EXPECTED_POSTGRESQL_MAJOR: Final = 18
 
@@ -36,6 +36,7 @@ def create_database_engine(settings: Settings) -> AsyncEngine:
     """Create the shared asynchronous database engine."""
     return create_async_engine(
         str(settings.database_url),
+        hide_parameters=True,
         connect_args={"connect_timeout": DATABASE_TIMEOUT_SECONDS},
         max_overflow=DATABASE_MAX_OVERFLOW,
         pool_pre_ping=True,

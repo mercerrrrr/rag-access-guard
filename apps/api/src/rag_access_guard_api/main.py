@@ -9,6 +9,9 @@ from pydantic import BaseModel, ConfigDict
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine, is_database_ready
+from rag_access_guard_api.routes.auth import build_auth_router
+from rag_access_guard_api.routes.auth_errors import register_auth_errors
+from rag_access_guard_api.services.auth import AuthService
 
 SERVICE_UNAVAILABLE_DETAIL: Final = "Service unavailable"
 
@@ -23,14 +26,22 @@ class HealthResponse(BaseModel):
 
 def create_app() -> FastAPI:
     """Create the FastAPI application."""
-    engine = create_database_engine(Settings())
+    settings = Settings()
+    engine = create_database_engine(settings)
+    auth = AuthService(engine, settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-        yield
-        await engine.dispose()
+        try:
+            await auth.initialize()
+            yield
+        finally:
+            await engine.dispose()
 
     application = FastAPI(title="RAG Access Guard API", lifespan=lifespan)
+
+    application.include_router(build_auth_router(auth, settings))
+    register_auth_errors(application)
 
     @application.get(
         "/api/health/live",
