@@ -12,6 +12,17 @@ from rag_access_guard_api.schemas.auth import (
     UserResponse,
 )
 from rag_access_guard_api.services.auth import AuthCredentials, AuthService
+from rag_access_guard_api.services.documents import require_admin
+from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.security import MutationUoW, ReadUoW
+from rag_access_guard_api.services.tokens import matches_token
+
+
+def check_admin_mutation(uow: ReadUoW | MutationUoW, csrf: str) -> None:
+    """Check current administrative authority and session-bound CSRF."""
+    require_admin(uow)
+    if not matches_token(csrf, uow.csrf_digest):
+        raise ForbiddenError
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,7 @@ from starlette.responses import Response
 from rag_access_guard_api.services.errors import (
     AlreadyAuthenticatedError,
     ForbiddenError,
+    GrantConflictError,
     RateLimitedError,
     UnauthenticatedError,
 )
@@ -25,7 +26,7 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Attach response policy after endpoint and exception processing."""
         response = await call_next(request)
-        if request.url.path.startswith(("/api/auth/", "/api/admin/documents")):
+        if request.url.path.startswith(("/api/auth/", "/api/admin/", "/api/documents")):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
         return response
@@ -39,7 +40,7 @@ def register_auth_errors(app: FastAPI) -> None:
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
         headers = (
             {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-            if request.url.path.startswith(("/api/auth/", "/api/admin/documents"))
+            if request.url.path.startswith(("/api/auth/", "/api/admin/", "/api/documents"))
             else None
         )
         return JSONResponse(
@@ -58,6 +59,10 @@ def register_auth_errors(app: FastAPI) -> None:
     @app.exception_handler(AlreadyAuthenticatedError)
     async def conflict(_request: Request, _: AlreadyAuthenticatedError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "Already authenticated"})
+
+    @app.exception_handler(GrantConflictError)
+    async def grant_conflict(_request: Request, _: GrantConflictError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "Grant already exists"})
 
     @app.exception_handler(RateLimitedError)
     async def rate_limited(_: Request, error: RateLimitedError) -> JSONResponse:

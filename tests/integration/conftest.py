@@ -7,11 +7,13 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from psycopg import sql
-from sqlalchemy import Connection, Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import make_url
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.main import create_app
+from rag_access_guard_api.persistence import User
+from rag_access_guard_api.schemas.access import GrantView
 from rag_access_guard_api.schemas.auth import CsrfResponse
 from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.server import create_event_loop
@@ -84,6 +86,24 @@ def registered_document(admin_client: TestClient) -> DocumentSummary:
     )
     assert response.status_code == 201
     return DocumentSummary.model_validate_json(response.content)
+
+
+@pytest.fixture
+def self_grant(
+    admin_client: TestClient, auth_database: Engine, registered_document: DocumentSummary
+) -> GrantView:
+    with auth_database.connect() as connection:
+        user_id = connection.execute(select(User.id).where(User.login == "reader")).scalar_one()
+    response = admin_client.post(
+        f"/api/admin/documents/{registered_document.id}/grants",
+        json={"user_id": str(user_id)},
+        headers={
+            "Origin": "https://rag.test",
+            "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+        },
+    )
+    assert response.status_code == 201
+    return GrantView.model_validate_json(response.content)
 
 
 @pytest.fixture

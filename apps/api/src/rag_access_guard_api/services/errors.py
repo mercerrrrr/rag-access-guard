@@ -1,6 +1,10 @@
 """Content-free authentication failures suitable for HTTP boundaries."""
 
 
+class GrantConflictError(Exception):
+    """The requested direct allow path already exists."""
+
+
 class UnauthenticatedError(Exception):
     """No currently valid server session or credentials."""
 
