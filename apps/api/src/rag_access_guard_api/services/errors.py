@@ -2,7 +2,11 @@
 
 
 class GrantConflictError(Exception):
-    """The requested direct allow path already exists."""
+    """The requested explicit allow path already exists."""
+
+
+class RoleConflictError(Exception):
+    """The immutable role code is already assigned."""
 
 
 class UnauthenticatedError(Exception):

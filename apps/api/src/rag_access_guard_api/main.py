@@ -10,7 +10,7 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine, is_database_ready
-from rag_access_guard_api.routes.access import build_access_router
+from rag_access_guard_api.routes.access import build_access_router, build_role_router
 from rag_access_guard_api.routes.auth import build_auth_router
 from rag_access_guard_api.routes.auth_errors import register_auth_errors
 from rag_access_guard_api.routes.documents import build_documents_router
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     application.include_router(build_auth_router(auth, settings))
     application.include_router(build_documents_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_access_router(PolicyUnitOfWork(engine), settings))
+    application.include_router(build_role_router(PolicyUnitOfWork(engine), settings))
     application.add_middleware(RequestBodyLimitMiddleware, max_body_size=MAX_UPLOAD_BYTES)
     register_auth_errors(application)
 

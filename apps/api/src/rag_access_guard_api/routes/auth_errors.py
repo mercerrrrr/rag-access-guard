@@ -14,6 +14,7 @@ from rag_access_guard_api.services.errors import (
     ForbiddenError,
     GrantConflictError,
     RateLimitedError,
+    RoleConflictError,
     UnauthenticatedError,
 )
 from rag_access_guard_api.services.text_documents import DocumentError
@@ -32,9 +33,14 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 
+async def _role_conflict(_request: Request, _: RoleConflictError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": "Role already exists"})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
+    _ = app.exception_handler(RoleConflictError)(_role_conflict)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:

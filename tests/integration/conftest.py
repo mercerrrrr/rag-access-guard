@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -7,6 +7,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from psycopg import sql
+from pydantic import TypeAdapter
 from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import make_url
 
@@ -101,6 +102,53 @@ def self_grant(
             "Origin": "https://rag.test",
             "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
         },
+    )
+    assert response.status_code == 201
+    return GrantView.model_validate_json(response.content)
+
+
+@pytest.fixture
+def role_id(admin_client: TestClient) -> UUID:
+    response = admin_client.post(
+        "/api/admin/roles",
+        json={"code": "engineering", "display_name": "Engineering"},
+        headers={
+            "Origin": "https://rag.test",
+            "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+        },
+    )
+    assert response.status_code == 201
+    return TypeAdapter(UUID).validate_python(response.json()["id"])
+
+
+@pytest.fixture
+def role_member_id(auth_database: Engine) -> UUID:
+    with auth_database.connect() as connection:
+        return connection.execute(select(User.id).where(User.login == "reader")).scalar_one()
+
+
+@pytest.fixture
+def role_grant(
+    admin_client: TestClient,
+    role_id: UUID,
+    role_member_id: UUID,
+    registered_document: DocumentSummary,
+) -> GrantView:
+    headers = {
+        "Origin": "https://rag.test",
+        "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+    }
+    assert (
+        admin_client.put(
+            f"/api/admin/roles/{role_id}/members/{role_member_id}",
+            headers=headers,
+        ).status_code
+        == 204
+    )
+    response = admin_client.post(
+        f"/api/admin/documents/{registered_document.id}/grants",
+        json={"role_id": str(role_id)},
+        headers=headers,
     )
     assert response.status_code == 201
     return GrantView.model_validate_json(response.content)

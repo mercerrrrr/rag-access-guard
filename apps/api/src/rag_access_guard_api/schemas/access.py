@@ -1,9 +1,9 @@
 """Closed request and response shapes for document access."""
 
-from typing import ClassVar
+from typing import Annotated, ClassVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 
 class AccessibleDocument(BaseModel):
@@ -36,6 +36,13 @@ class DirectGrantRequest(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
     user_id: UUID
+
+
+class RoleGrantRequest(BaseModel):
+    """A role is an alternative grant subject, never an acting identity."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    role_id: UUID
 
 
 class GrantView(BaseModel):
@@ -71,3 +78,40 @@ class UserList(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
     items: tuple[UserSummary, ...]
+
+
+class RoleView(BaseModel):
+    """Role metadata without implicit administrative capabilities."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    id: UUID
+    code: str
+    display_name: str
+
+
+class RoleList(BaseModel):
+    """Roles ordered by immutable code and identifier."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    items: tuple[RoleView, ...]
+
+
+type RoleDisplayName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200, pattern=r"^[^\x00]+$"),
+]
+
+
+class RoleCreate(BaseModel):
+    """Validated immutable role code and display label."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    code: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+    display_name: RoleDisplayName
+
+
+class RolePatch(BaseModel):
+    """Only the display label is mutable."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    display_name: RoleDisplayName
