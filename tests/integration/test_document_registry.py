@@ -31,8 +31,8 @@ def test_registry_create_does_not_create_document_grant(
         (b"a\x00b", "example.txt", "text/plain", 422),
         (b"", "example.txt", "text/plain", 422),
         (b" \r\n\t", "example.txt", "text/plain", 422),
-        (b"a" * 1048577, "example.txt", "text/plain", 413),
-        (b"content", "example.md", "text/plain", 415),
+        (b"a" * 10_485_761, "example.txt", "text/plain", 413),
+        (b"content", "example.exe", "text/plain", 415),
         (b"content", "example.txt", "application/pdf", 415),
     ],
     ids=["invalid-utf8", "nul", "empty", "blank", "oversize", "extension", "mime"],
@@ -65,7 +65,7 @@ def test_utf8_bom_and_newlines_have_canonical_text(
     response = admin_client.post(
         "/api/admin/documents",
         data={"title": "  Synthetic  "},
-        files={"file": ("../../example.TXT", raw, "text/plain")},
+        files={"file": ("example.TXT", raw, "text/plain")},
         headers={
             "Origin": "https://rag.test",
             "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
@@ -83,7 +83,7 @@ def test_exact_file_limit_is_accepted(admin_client: TestClient) -> None:
     response = admin_client.post(
         "/api/admin/documents",
         data={"title": "Synthetic"},
-        files={"file": ("example.txt", b"a" * 1_048_576, "text/plain")},
+        files={"file": ("example.txt", b"a" * 10_485_760, "text/plain")},
         headers={
             "Origin": "https://rag.test",
             "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],

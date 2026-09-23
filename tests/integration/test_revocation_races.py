@@ -49,9 +49,9 @@ def test_committed_revocation_prevents_waiting_read(
                 _ = writer.execute(
                     text("""INSERT INTO document_versions
                     (id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-                    media_type,byte_size,parser_revision,status,created_by)
+                    media_type,byte_size,parser_revision,status,created_by,ingestion_manifest)
                     SELECT :id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-                    media_type,byte_size,parser_revision,status,created_by
+                    media_type,byte_size,parser_revision,status,created_by,ingestion_manifest
                     FROM document_versions"""),
                     {"id": version_id},
                 )

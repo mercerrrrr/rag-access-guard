@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
     application = FastAPI(title="RAG Access Guard API", lifespan=lifespan)
 
     application.include_router(build_auth_router(auth, settings))
-    application.include_router(build_documents_router(PolicyUnitOfWork(engine), settings))
+    application.include_router(build_documents_router(engine, settings))
     application.include_router(build_access_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_role_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_users_router(PolicyUnitOfWork(engine), settings))

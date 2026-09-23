@@ -5,6 +5,7 @@ from typing import override
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from python_multipart.exceptions import MultipartParseError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -37,10 +38,15 @@ async def _role_conflict(_request: Request, _: RoleConflictError) -> JSONRespons
     return JSONResponse(status_code=409, content={"detail": "Role already exists"})
 
 
+async def _invalid_multipart(_request: Request, _: MultipartParseError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": "Invalid document"})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
     _ = app.exception_handler(RoleConflictError)(_role_conflict)
+    _ = app.exception_handler(MultipartParseError)(_invalid_multipart)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
@@ -90,7 +96,7 @@ def register_auth_errors(app: FastAPI) -> None:
     async def invalid_document(_request: Request, error: DocumentError) -> JSONResponse:
         details = {
             404: "Not found",
-            413: "Request too large",
+            413: "Upload too large",
             415: "Unsupported media type",
             422: "Invalid document",
         }

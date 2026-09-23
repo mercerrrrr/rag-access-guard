@@ -171,7 +171,7 @@ def test_unknown_admin_resource_and_empty_patch(
 def test_upload_transport_limit_without_content_length(admin_client: TestClient) -> None:
     response = admin_client.post(
         "/api/admin/documents",
-        content=iter([b"a" * 600_000, b"b" * 600_000]),
+        content=iter([b"a" * 6_000_000, b"b" * 6_000_000]),
         headers={
             "Origin": "https://rag.test",
             "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
@@ -179,4 +179,19 @@ def test_upload_transport_limit_without_content_length(admin_client: TestClient)
         },
     )
     assert response.status_code == 413
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_malformed_multipart_is_sanitized(admin_client: TestClient) -> None:
+    response = admin_client.post(
+        "/api/admin/documents",
+        content=b"invalid multipart",
+        headers={
+            "Origin": "https://rag.test",
+            "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+            "Content-Type": "multipart/form-data; boundary=synthetic",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid document"}
     assert response.headers["cache-control"] == "private, no-store"

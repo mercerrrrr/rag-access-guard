@@ -10,8 +10,9 @@ from rag_access_guard_api.persistence import Document, DocumentVersion
 from rag_access_guard_api.schemas.documents import DocumentSummary, DocumentVersionSummary
 from rag_access_guard_api.services.audit import AuditRecord
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.ingestion import PreparedUpload, store_version
 from rag_access_guard_api.services.security import MutationUoW, ReadUoW
-from rag_access_guard_api.services.text_documents import DocumentError, parse_text, validate_title
+from rag_access_guard_api.services.text_documents import DocumentError, validate_title
 
 
 def require_admin(uow: ReadUoW | MutationUoW) -> None:
@@ -50,44 +51,25 @@ async def _record_change(uow: MutationUoW, document_id: UUID) -> None:
 
 
 async def register_text_document(
-    uow: MutationUoW, *, title: str, original_bytes: bytes, filename: str, media_type: str
+    uow: MutationUoW, title: str, prepared: PreparedUpload
 ) -> DocumentSummary:
     """Store a version, activate it and audit the change in one transaction."""
     require_admin(uow)
     title = validate_title(title)
-    parsed = parse_text(original_bytes, filename, media_type)
-    document_id, version_id = uuid4(), uuid4()
+    document_id = uuid4()
     _ = await uow.connection.execute(
         insert(Document).values(id=document_id, title=title, created_by=uow.principal.principal_id)
     )
-    _ = await uow.connection.execute(
-        insert(DocumentVersion).values(
-            id=version_id,
-            document_id=document_id,
-            original_bytes=original_bytes,
-            content_sha256=parsed.content_sha256,
-            extracted_text=parsed.text,
-            text_sha256=parsed.text_sha256,
-            media_type="text/plain",
-            byte_size=len(original_bytes),
-            parser_revision="utf8-text-v1",
-            status="stored",
-            created_by=uow.principal.principal_id,
-        )
-    )
+    _ = await store_version(uow, document_id, prepared)
     row = (
         (
             await uow.connection.execute(
-                update(Document)
-                .where(Document.id == document_id)
-                .values(active_version_id=version_id)
-                .returning(*_summary_columns())
+                select(*_summary_columns()).where(Document.id == document_id)
             )
         )
         .mappings()
         .one()
     )
-    await _record_change(uow, document_id)
     return DocumentSummary.model_validate(row)
 
 
