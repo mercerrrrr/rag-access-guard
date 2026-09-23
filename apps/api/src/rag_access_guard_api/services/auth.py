@@ -11,7 +11,7 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from rag_access_guard_api.config import Settings
-from rag_access_guard_api.persistence import PolicyState, Session, User
+from rag_access_guard_api.persistence import Session, User
 from rag_access_guard_api.schemas.auth import LoginRequest, LoginResponse, UserView
 from rag_access_guard_api.services import passwords
 from rag_access_guard_api.services.audit import AuditRecord, write_audit
@@ -22,7 +22,7 @@ from rag_access_guard_api.services.errors import (
     ForbiddenError,
     UnauthenticatedError,
 )
-from rag_access_guard_api.services.security import PolicyUnitOfWork, database_clock
+from rag_access_guard_api.services.security import PolicyUnitOfWork, database_clock, lock_policy
 from rag_access_guard_api.services.tokens import issue_token, matches_token, token_digest
 
 
@@ -54,13 +54,7 @@ class AuthService:
     @asynccontextmanager
     async def _authentication_scope(self) -> AsyncGenerator[tuple[AsyncConnection, int]]:
         async with self.engine.begin() as connection:
-            revision = (
-                await connection.execute(
-                    select(PolicyState.revision)
-                    .where(PolicyState.id == 1)
-                    .with_for_update(read=True)
-                )
-            ).scalar_one()
+            revision = await lock_policy(connection, exclusive=False)
             yield connection, revision
 
     async def bootstrap(self, credentials: AuthCredentials, peer: str) -> tuple[str | None, str]:

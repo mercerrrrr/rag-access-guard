@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import DateTime, func, select, update
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from rag_access_guard_api.persistence import PolicyState, Session, User
@@ -14,6 +15,22 @@ from rag_access_guard_api.schemas.auth import SessionPrincipal, UserView
 from rag_access_guard_api.services.audit import AuditRecord, write_audit
 from rag_access_guard_api.services.errors import UnauthenticatedError
 from rag_access_guard_api.services.tokens import token_digest
+
+
+async def lock_policy(connection: AsyncConnection, *, exclusive: bool) -> int:
+    """Lock the singleton in a separate statement and reject malformed policy state."""
+    identifier, revision = (
+        (
+            await connection.execute(
+                select(PolicyState.id, PolicyState.revision).with_for_update(read=not exclusive)
+            )
+        )
+        .tuples()
+        .one()
+    )
+    if identifier != 1:
+        raise NoResultFound
+    return revision
 
 
 async def database_clock(connection: AsyncConnection) -> datetime:
@@ -133,13 +150,7 @@ class PolicyUnitOfWork:
         if digest is None:
             raise UnauthenticatedError
         async with self._engine.begin() as connection:
-            revision = (
-                await connection.execute(
-                    select(PolicyState.revision)
-                    .where(PolicyState.id == 1)
-                    .with_for_update(read=True)
-                )
-            ).scalar_one()
+            revision = await lock_policy(connection, exclusive=False)
             yield await _gate(connection, digest, revision)
 
     @asynccontextmanager
@@ -149,9 +160,5 @@ class PolicyUnitOfWork:
         if digest is None:
             raise UnauthenticatedError
         async with self._engine.begin() as connection:
-            revision = (
-                await connection.execute(
-                    select(PolicyState.revision).where(PolicyState.id == 1).with_for_update()
-                )
-            ).scalar_one()
+            revision = await lock_policy(connection, exclusive=True)
             yield MutationUoW(await _gate(connection, digest, revision))

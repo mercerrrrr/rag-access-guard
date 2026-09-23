@@ -16,14 +16,15 @@ from rag_access_guard_api.services.text_documents import DocumentError
 async def grant_user(uow: MutationUoW, document_id: UUID, user_id: UUID) -> GrantView:
     """Add one direct allow path under the exclusive policy lock."""
     require_admin(uow)
-    if (
-        await uow.connection.execute(select(Document.id).where(Document.id == document_id))
-    ).scalar_one_or_none() is None:
-        raise DocumentError(404)
-    if (
-        await uow.connection.execute(select(User.id).where(User.id == user_id))
-    ).scalar_one_or_none() is None:
-        raise DocumentError(404)
+    for identifier, model in sorted(
+        ((document_id, Document), (user_id, User)), key=lambda item: item[0]
+    ):
+        if (
+            await uow.connection.execute(
+                select(model.id).where(model.id == identifier).with_for_update()
+            )
+        ).scalar_one_or_none() is None:
+            raise DocumentError(404)
     if (
         await uow.connection.execute(
             select(DocumentGrant.id).where(

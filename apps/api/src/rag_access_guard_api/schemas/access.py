@@ -1,9 +1,9 @@
 """Closed request and response shapes for document access."""
 
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints, model_validator
 
 
 class AccessibleDocument(BaseModel):
@@ -115,3 +115,23 @@ class RolePatch(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
     display_name: RoleDisplayName
+
+
+class UserSecurityPatch(BaseModel):
+    """Explicit security flags only; omitted values leave current state intact."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    is_active: StrictBool | None = None
+    is_admin: StrictBool | None = None
+
+    @model_validator(mode="after")
+    def require_flags(self) -> Self:
+        """Reject empty patches and explicit nulls before the transaction starts."""
+        if (
+            not self.model_fields_set
+            or ("is_active" in self.model_fields_set and self.is_active is None)
+            or ("is_admin" in self.model_fields_set and self.is_admin is None)
+        ):
+            message = "At least one boolean security flag is required"
+            raise ValueError(message)
+        return self
