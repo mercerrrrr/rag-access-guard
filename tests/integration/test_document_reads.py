@@ -2,11 +2,12 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, insert, text, update
+from sqlalchemy import Engine, insert, update
 
 from rag_access_guard_api.persistence import Document, DocumentGrant, Role, UserRole
 from rag_access_guard_api.schemas.access import AccessibleDocuments, DocumentText, GrantView
 from rag_access_guard_api.schemas.documents import DocumentSummary
+from tests.integration.chunk_fixtures import copy_chunked_version
 
 
 def test_admin_without_grant_cannot_read_content(
@@ -139,16 +140,9 @@ def test_old_version_is_denied_after_active_switch(
     registered_document: DocumentSummary,
 ) -> None:
     version_id = uuid4()
+    assert registered_document.active_version_id is not None
     with auth_database.begin() as connection:
-        _ = connection.execute(
-            text("""INSERT INTO document_versions
-            (id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-             media_type,byte_size,parser_revision,status,created_by,ingestion_manifest)
-            SELECT :id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-                   media_type,byte_size,parser_revision,status,created_by,ingestion_manifest
-            FROM document_versions WHERE id=:old"""),
-            {"id": version_id, "old": registered_document.active_version_id},
-        )
+        copy_chunked_version(connection, registered_document.active_version_id, version_id)
         _ = connection.execute(
             update(Document)
             .where(Document.id == self_grant.document_id)

@@ -37,7 +37,7 @@ def readable_document(principal_id: UUID) -> ColumnElement[bool]:
         .where(
             DocumentVersion.document_id == Document.id,
             DocumentVersion.id == Document.active_version_id,
-            DocumentVersion.status == "stored",
+            DocumentVersion.status.in_(("stored", "chunked")),
         )
         .exists()
     )

@@ -49,6 +49,7 @@ def test_session_revoked_during_parse_prevents_write(
     with auth_database.connect() as connection:
         assert connection.execute(select(PolicyState.revision)).scalar_one() == revision
         assert connection.execute(text("SELECT count(*) FROM document_versions")).scalar_one() == 1
+        assert connection.execute(text("SELECT count(*) FROM document_chunks")).scalar_one() == 1
         assert (
             connection.execute(text("SELECT active_version_id FROM documents")).scalar_one()
             == registered_document.active_version_id
@@ -81,6 +82,7 @@ def test_audit_failure_rolls_back_new_version(
     with auth_database.connect() as connection:
         assert connection.execute(select(PolicyState.revision)).scalar_one() == revision
         assert connection.execute(text("SELECT count(*) FROM document_versions")).scalar_one() == 1
+        assert connection.execute(text("SELECT count(*) FROM document_chunks")).scalar_one() == 1
         assert (
             connection.execute(text("SELECT active_version_id FROM documents")).scalar_one()
             == registered_document.active_version_id

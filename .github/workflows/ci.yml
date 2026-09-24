@@ -53,6 +53,12 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
 
+      - name: Provision pinned tokenizer without model weights
+        run: bash scripts/provision-tokenizer.sh
+
+      - name: Validate tokenizer offline
+        run: uv run --frozen python -c 'from rag_access_guard_api.adapters.tokenizer import get_tokenizer; assert get_tokenizer().count("test") == 1'
+
       - name: Start PostgreSQL
         run: docker compose up --detach --wait postgres
 

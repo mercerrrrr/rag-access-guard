@@ -30,7 +30,9 @@
 
 Административный реестр принимает `.txt` и `.md` до 10 MiB в UTF-8. Исходные байты,
 канонический текст и их SHA-256 сохраняются в неизменяемой версии со статусом
-`stored`. Загрузка не создаёт разрешений на чтение; API реестра возвращает только
+`chunked`. Текст разбивается на точные фрагменты до 400 токенов E5 с целевым
+перекрытием 50; сохраняются смещения, хеши и принадлежность неизменяемой версии.
+Загрузка не создаёт разрешений на чтение; API реестра возвращает только
 метаданные. Изменение документа, ревизии политики и аудита выполняется атомарно.
 
 Сборка отдельного пакета: `uv build --package rag-access-guard`.
@@ -61,6 +63,7 @@ GET /api/health/ready
 ```powershell
 Copy-Item .env.example .env
 uv sync --frozen
+& "$env:ProgramFiles\Git\bin\bash.exe" scripts/provision-tokenizer.sh
 docker compose up --detach --wait postgres
 $env:RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET = uv run python -c "import secrets; print(secrets.token_hex(32))"
 $env:RAG_ACCESS_GUARD_AUTH_ORIGIN = "http://localhost:5173"
@@ -68,6 +71,12 @@ $env:RAG_ACCESS_GUARD_LOOPBACK_DEVELOPMENT = "true"
 uv run --env-file .env alembic -c apps/api/alembic.ini upgrade head
 uv run --env-file .env rag-access-guard-api
 ```
+
+Для provisioning на Windows нужен Git Bash. Скрипт скачивает только tokenizer
+`intfloat/multilingual-e5-small` ревизии `614241f622f53c4eeff9890bdc4f31cfecc418b3`
+и проверяет SHA-256. Кеш `.cache/e5/` не входит в Git. Другой локальный путь
+задаётся через `RAG_ACCESS_GUARD_TOKENIZER_PATH`; запросы API ничего не скачивают.
+Веса модели, эмбеддинги и поиск пока не подключены.
 
 После запуска:
 

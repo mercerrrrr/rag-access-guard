@@ -10,10 +10,12 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from rag_access_guard_api.adapters.text_parser import parse_text
-from rag_access_guard_api.persistence import Document, DocumentVersion
+from rag_access_guard_api.adapters.tokenizer import get_tokenizer
+from rag_access_guard_api.persistence import Document, DocumentChunk, DocumentVersion
 from rag_access_guard_api.schemas.documents import DocumentVersionSummary
 from rag_access_guard_api.schemas.ingestion import IngestionManifest, ParsedDocument, UploadPayload
 from rag_access_guard_api.services.audit import AuditRecord
+from rag_access_guard_api.services.chunking import CHUNKER_REVISION, ChunkDraft, chunk_text
 from rag_access_guard_api.services.errors import ForbiddenError
 from rag_access_guard_api.services.security import MutationUoW, PolicyUnitOfWork
 from rag_access_guard_api.services.text_documents import DocumentError
@@ -27,13 +29,20 @@ class PreparedUpload:
     upload: UploadPayload
     parsed: ParsedDocument
     manifest: IngestionManifest
+    chunks: tuple[ChunkDraft, ...]
 
 
 def prepare_upload(upload: UploadPayload) -> PreparedUpload:
     """Run on a worker thread, outside all database transactions."""
     parsed = parse_text(upload)
+    tokenizer = get_tokenizer()
+    chunks = chunk_text(parsed.text, tokenizer)
     config = json.dumps(
-        {"parser_revision": parsed.parser_revision},
+        {
+            "parser_revision": parsed.parser_revision,
+            "chunker_revision": CHUNKER_REVISION,
+            "tokenizer_revision": tokenizer.identity,
+        },
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -44,13 +53,13 @@ def prepare_upload(upload: UploadPayload) -> PreparedUpload:
         text_sha256=sha256(parsed.text.encode("utf-8")).hexdigest(),
         byte_size=len(upload.data),
         parser_revision=parsed.parser_revision,
-        chunker_revision=None,
-        tokenizer_revision=None,
+        chunker_revision=CHUNKER_REVISION,
+        tokenizer_revision=tokenizer.identity,
         embedding_model_id=None,
         embedding_model_revision=None,
         config_sha256=sha256(config.encode("utf-8")).hexdigest(),
     )
-    return PreparedUpload(upload, parsed, manifest)
+    return PreparedUpload(upload, parsed, manifest, chunks)
 
 
 async def store_version(
@@ -91,6 +100,35 @@ async def store_version(
         .one()
     )
     version = DocumentVersionSummary.model_validate(row)
+    if not prepared.chunks:
+        raise DocumentError(422, "parse_failed")
+    for chunk in prepared.chunks:
+        if (
+            not 0 <= chunk.char_start < chunk.char_end <= len(prepared.parsed.text)
+            or chunk.text != prepared.parsed.text[chunk.char_start : chunk.char_end]
+            or sha256(chunk.text.encode("utf-8")).hexdigest() != chunk.content_sha256
+        ):
+            raise DocumentError(422, "parse_failed")
+    _ = await uow.connection.execute(
+        insert(DocumentChunk),
+        [
+            {
+                "id": uuid4(),
+                "document_id": document_id,
+                "document_version_id": version.id,
+                "ordinal": chunk.ordinal,
+                "text": chunk.text,
+                "content_sha256": chunk.content_sha256,
+                "token_count": chunk.token_count,
+                "char_start": chunk.char_start,
+                "char_end": chunk.char_end,
+            }
+            for chunk in prepared.chunks
+        ],
+    )
+    _ = await uow.connection.execute(
+        update(DocumentVersion).where(DocumentVersion.id == version.id).values(status="chunked")
+    )
     _ = await uow.connection.execute(
         update(Document).where(Document.id == document_id).values(active_version_id=version.id)
     )
@@ -104,7 +142,7 @@ async def store_version(
             document_id=document_id,
         )
     )
-    return version
+    return version.model_copy(update={"status": "chunked"})
 
 
 async def ingest_text_version(

@@ -20,11 +20,21 @@ def test_manifest_binds_source_and_extracted_text(
     assert manifest.source_sha256 == sha256(b"PROTECTED_SYNTHETIC").hexdigest()
     assert manifest.text_sha256 == manifest.source_sha256
     assert manifest.byte_size == len(b"PROTECTED_SYNTHETIC")
-    assert manifest.chunker_revision is None
-    assert manifest.tokenizer_revision is None
+    assert manifest.chunker_revision == "e5-window400-overlap50-offsets-v1"
+    assert manifest.tokenizer_revision == (
+        "intfloat/multilingual-e5-small@614241f622f53c4eeff9890bdc4f31cfecc418b3:content-no-special"
+    )
     assert manifest.embedding_model_id is None
     assert manifest.embedding_model_revision is None
-    config = json.dumps({"parser_revision": "utf8-text-v1"}, sort_keys=True, separators=(",", ":"))
+    config = json.dumps(
+        {
+            "parser_revision": "utf8-text-v1",
+            "chunker_revision": "e5-window400-overlap50-offsets-v1",
+            "tokenizer_revision": manifest.tokenizer_revision,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     assert manifest.config_sha256 == sha256(config.encode()).hexdigest()
 
 
@@ -44,7 +54,7 @@ def test_lifecycle_preserves_manifest(
     assert registered_document.active_version_id is not None
     with auth_database.begin() as connection:
         before = connection.execute(select(DocumentVersion.ingestion_manifest)).scalar_one()
-        for status in ("chunked", "indexing", "ready"):
+        for status in ("indexing", "ready"):
             _ = connection.execute(
                 text("UPDATE document_versions SET status=:status"), {"status": status}
             )
@@ -58,7 +68,7 @@ def test_lifecycle_preserves_manifest(
         _ = connection.execute(text("UPDATE document_versions SET status='stored'"))
 
 
-@pytest.mark.parametrize("status", ["ready", "indexing", "failed"])
+@pytest.mark.parametrize("status", ["ready", "stored", "chunked", "failed"])
 def test_invalid_transition_is_rejected(
     registered_document: DocumentSummary, auth_database: Engine, status: str
 ) -> None:

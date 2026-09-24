@@ -10,6 +10,7 @@ def test_access_schema_starts_without_accounts_or_grants(schema_connection: Conn
         "user_roles",
         "documents",
         "document_versions",
+        "document_chunks",
         "document_grants",
         "policy_state",
         "audit_events",

@@ -12,6 +12,7 @@ from rag_access_guard_api.schemas.access import GrantView
 from rag_access_guard_api.schemas.audit import AuditPage
 from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.services import security
+from tests.integration.chunk_fixtures import copy_chunked_version
 from tests.integration.policy_probe import wait_for_policy_wait
 
 
@@ -46,15 +47,8 @@ def test_committed_revocation_prevents_waiting_read(
             wait_for_policy_wait(auth_database, backend)
             if change == "active_version":
                 version_id = uuid4()
-                _ = writer.execute(
-                    text("""INSERT INTO document_versions
-                    (id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-                    media_type,byte_size,parser_revision,status,created_by,ingestion_manifest)
-                    SELECT :id,document_id,original_bytes,content_sha256,extracted_text,text_sha256,
-                    media_type,byte_size,parser_revision,status,created_by,ingestion_manifest
-                    FROM document_versions"""),
-                    {"id": version_id},
-                )
+                assert registered_document.active_version_id is not None
+                copy_chunked_version(writer, registered_document.active_version_id, version_id)
                 _ = writer.execute(
                     text("UPDATE documents SET active_version_id=:id"), {"id": version_id}
                 )
