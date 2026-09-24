@@ -45,6 +45,12 @@ class E5TokenCounter:
         """Count the complete input; callers reject over-budget inputs explicitly."""
         return len(self._tokenizer.encode(f"{kind}: {text}", add_special_tokens=True).ids)
 
+    def embedding_input_ids(
+        self, text: str, *, kind: Literal["query", "passage"]
+    ) -> tuple[int, ...]:
+        """Use the same pinned encoding for inference and budget checks."""
+        return tuple(self._tokenizer.encode(f"{kind}: {text}", add_special_tokens=True).ids)
+
 
 @cache
 def get_tokenizer() -> E5TokenCounter:

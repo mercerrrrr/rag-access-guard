@@ -10,6 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from rag_access_guard_api.schemas.embedding_vectors import (
+    EmbeddingError,
+    VersionActivationConflictError,
+)
 from rag_access_guard_api.services.errors import (
     AlreadyAuthenticatedError,
     ForbiddenError,
@@ -42,11 +46,23 @@ async def _invalid_multipart(_request: Request, _: MultipartParseError) -> JSONR
     return JSONResponse(status_code=422, content={"detail": "Invalid document"})
 
 
+async def _indexing_unavailable(_request: Request, _: EmbeddingError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Indexing unavailable"})
+
+
+async def _activation_conflict(
+    _request: Request, _: VersionActivationConflictError
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": "Version activation conflict"})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
     _ = app.exception_handler(RoleConflictError)(_role_conflict)
     _ = app.exception_handler(MultipartParseError)(_invalid_multipart)
+    _ = app.exception_handler(EmbeddingError)(_indexing_unavailable)
+    _ = app.exception_handler(VersionActivationConflictError)(_activation_conflict)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:

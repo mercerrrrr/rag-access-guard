@@ -5,21 +5,24 @@ from dataclasses import dataclass
 from hashlib import sha256
 from uuid import UUID, uuid4
 
-from anyio import to_thread
-from sqlalchemy import insert, select, update
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import insert, update
 
+from rag_access_guard_api.adapters.embeddings import MODEL_ID
 from rag_access_guard_api.adapters.text_parser import parse_text
-from rag_access_guard_api.adapters.tokenizer import get_tokenizer
-from rag_access_guard_api.persistence import Document, DocumentChunk, DocumentVersion
+from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION, get_tokenizer
+from rag_access_guard_api.persistence import (
+    ChunkEmbedding,
+    Document,
+    DocumentChunk,
+    DocumentVersion,
+)
 from rag_access_guard_api.schemas.documents import DocumentVersionSummary
+from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError, validate_vectors
 from rag_access_guard_api.schemas.ingestion import IngestionManifest, ParsedDocument, UploadPayload
 from rag_access_guard_api.services.audit import AuditRecord
 from rag_access_guard_api.services.chunking import CHUNKER_REVISION, ChunkDraft, chunk_text
-from rag_access_guard_api.services.errors import ForbiddenError
-from rag_access_guard_api.services.security import MutationUoW, PolicyUnitOfWork
+from rag_access_guard_api.services.security import MutationUoW
 from rag_access_guard_api.services.text_documents import DocumentError
-from rag_access_guard_api.services.tokens import matches_token
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +33,7 @@ class PreparedUpload:
     parsed: ParsedDocument
     manifest: IngestionManifest
     chunks: tuple[ChunkDraft, ...]
+    vectors: tuple[tuple[float, ...], ...] | None = None
 
 
 def prepare_upload(upload: UploadPayload) -> PreparedUpload:
@@ -42,6 +46,8 @@ def prepare_upload(upload: UploadPayload) -> PreparedUpload:
             "parser_revision": parsed.parser_revision,
             "chunker_revision": CHUNKER_REVISION,
             "tokenizer_revision": tokenizer.identity,
+            "embedding_model_id": MODEL_ID,
+            "embedding_model_revision": MODEL_REVISION,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -55,8 +61,8 @@ def prepare_upload(upload: UploadPayload) -> PreparedUpload:
         parser_revision=parsed.parser_revision,
         chunker_revision=CHUNKER_REVISION,
         tokenizer_revision=tokenizer.identity,
-        embedding_model_id=None,
-        embedding_model_revision=None,
+        embedding_model_id=MODEL_ID,
+        embedding_model_revision=MODEL_REVISION,
         config_sha256=sha256(config.encode("utf-8")).hexdigest(),
     )
     return PreparedUpload(upload, parsed, manifest, chunks)
@@ -65,7 +71,11 @@ def prepare_upload(upload: UploadPayload) -> PreparedUpload:
 async def store_version(
     uow: MutationUoW, document_id: UUID, prepared: PreparedUpload
 ) -> DocumentVersionSummary:
-    """Insert and activate within an already authorized document mutation."""
+    """Store a complete ready or failed artifact without changing the active pointer."""
+    if prepared.vectors is None:
+        raise EmbeddingError
+    if prepared.vectors:
+        validate_vectors(prepared.vectors, len(prepared.chunks))
     manifest = prepared.manifest
     row = (
         (
@@ -109,11 +119,12 @@ async def store_version(
             or sha256(chunk.text.encode("utf-8")).hexdigest() != chunk.content_sha256
         ):
             raise DocumentError(422, "parse_failed")
+    chunk_ids = tuple(uuid4() for _ in prepared.chunks)
     _ = await uow.connection.execute(
         insert(DocumentChunk),
         [
             {
-                "id": uuid4(),
+                "id": chunk_id,
                 "document_id": document_id,
                 "document_version_id": version.id,
                 "ordinal": chunk.ordinal,
@@ -123,14 +134,48 @@ async def store_version(
                 "char_start": chunk.char_start,
                 "char_end": chunk.char_end,
             }
-            for chunk in prepared.chunks
+            for chunk_id, chunk in zip(chunk_ids, prepared.chunks, strict=True)
         ],
     )
     _ = await uow.connection.execute(
         update(DocumentVersion).where(DocumentVersion.id == version.id).values(status="chunked")
     )
     _ = await uow.connection.execute(
-        update(Document).where(Document.id == document_id).values(active_version_id=version.id)
+        update(DocumentVersion).where(DocumentVersion.id == version.id).values(status="indexing")
+    )
+    if not prepared.vectors:
+        _ = await uow.connection.execute(
+            update(DocumentVersion)
+            .where(DocumentVersion.id == version.id)
+            .values(status="failed", failure_code="index_failed")
+        )
+        return version.model_copy(update={"status": "failed"})
+    _ = await uow.connection.execute(
+        insert(ChunkEmbedding),
+        [
+            {
+                "chunk_id": chunk_id,
+                "embedding": list(vector),
+                "model_id": manifest.embedding_model_id,
+                "model_revision": manifest.embedding_model_revision,
+            }
+            for chunk_id, vector in zip(chunk_ids, prepared.vectors, strict=True)
+        ],
+    )
+    _ = await uow.connection.execute(
+        update(DocumentVersion).where(DocumentVersion.id == version.id).values(status="ready")
+    )
+    return version.model_copy(update={"status": "ready"})
+
+
+async def activate_version(uow: MutationUoW, version: DocumentVersionSummary) -> None:
+    """Publish a ready artifact together with its security revision and audit."""
+    if version.status != "ready":
+        raise EmbeddingError
+    _ = await uow.connection.execute(
+        update(Document)
+        .where(Document.id == version.document_id)
+        .values(active_version_id=version.id)
     )
     _ = await uow.record_change(
         AuditRecord(
@@ -139,29 +184,6 @@ async def store_version(
             outcome="success",
             actor_user_id=uow.principal.principal_id,
             principal_id=uow.principal.principal_id,
-            document_id=document_id,
+            document_id=version.document_id,
         )
     )
-    return version.model_copy(update={"status": "chunked"})
-
-
-async def ingest_text_version(
-    engine: AsyncEngine,
-    session_token: str,
-    document_id: UUID,
-    *,
-    upload: UploadPayload,
-    csrf_token: str,
-) -> DocumentVersionSummary:
-    """Recheck live authority after parsing, then atomically replace the active version."""
-    prepared = await to_thread.run_sync(prepare_upload, upload)
-    async with PolicyUnitOfWork(engine).mutation(session_token) as uow:
-        if not uow.principal.is_admin or not matches_token(csrf_token, uow.csrf_digest):
-            raise ForbiddenError
-        if (
-            await uow.connection.execute(
-                select(Document.id).where(Document.id == document_id).with_for_update()
-            )
-        ).scalar_one_or_none() is None:
-            raise DocumentError(404)
-        return await store_version(uow, document_id, prepared)

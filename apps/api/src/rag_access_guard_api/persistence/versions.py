@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_as_dataclass, mapped_column
 
 from rag_access_guard_api.persistence.base import Base
+from rag_access_guard_api.persistence.embedding_manifest import EMBEDDING_MANIFEST
 
 
 @mapped_as_dataclass(Base.registry, kw_only=True)
@@ -77,7 +78,8 @@ class DocumentVersion:
                 '{"chunker_revision":"e5-window400-overlap50-offsets-v1","parser_revision":"'
                 || parser_revision || '","tokenizer_revision":"intfloat/multilingual-e5-small@'
                 || '614241f622f53c4eeff9890bdc4f31cfecc418b3:content-no-special"}',
-                'UTF8')), 'hex'))""",
+                'UTF8')), 'hex')) OR """
+            + EMBEDDING_MANIFEST,
             name="ck_document_versions_manifest",
         ),
         CheckConstraint(

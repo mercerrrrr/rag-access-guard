@@ -18,6 +18,9 @@ dependencies = [
     "uvicorn[standard]>=0.36,<1",
     "argon2-cffi>=25.1,<26",
     "tokenizers==0.22.2",
+    "torch==2.8.0",
+    "transformers==4.57.6",
+    "pgvector==0.4.2",
 ]
 
 [project.scripts]
@@ -26,6 +29,12 @@ rag-access-guard-create-user = "rag_access_guard_api.cli.create_user:main"
 
 [tool.uv.sources]
 rag-access-guard = { workspace = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]

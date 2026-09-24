@@ -9,8 +9,9 @@ from sqlalchemy import Engine, select, text
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine
-from rag_access_guard_api.persistence import DocumentChunk, PolicyState
+from rag_access_guard_api.persistence import DocumentChunk, DocumentVersion, PolicyState
 from rag_access_guard_api.schemas.documents import DocumentSummary, DocumentVersionSummary
+from rag_access_guard_api.schemas.embedding_vectors import VersionActivationConflictError
 from rag_access_guard_api.schemas.ingestion import UploadPayload
 from rag_access_guard_api.server import create_event_loop
 from rag_access_guard_api.services import ingestion
@@ -36,7 +37,7 @@ def test_concurrent_rechunk_creates_separate_complete_versions(
         _ = barrier.wait()
         return prepared
 
-    async def reprocess() -> DocumentVersionSummary:
+    async def reprocess() -> DocumentVersionSummary | VersionActivationConflictError:
         engine = create_database_engine(Settings())
         try:
             return await rechunk_version(
@@ -46,6 +47,8 @@ def test_concurrent_rechunk_creates_separate_complete_versions(
                 source,
                 csrf_token=csrf,
             )
+        except VersionActivationConflictError as error:
+            return error
         finally:
             await engine.dispose()
 
@@ -61,27 +64,39 @@ def test_concurrent_rechunk_creates_separate_complete_versions(
             anyio.run, reprocess, backend_options={"loop_factory": create_event_loop}
         )
         versions = (first.result(30), second.result(30))
-    assert len({source, versions[0].id, versions[1].id}) == 3
-    assert all(version.status == "chunked" for version in versions)
+    winners = [version for version in versions if isinstance(version, DocumentVersionSummary)]
+    assert len(winners) == 1
+    assert sum(isinstance(version, VersionActivationConflictError) for version in versions) == 1
+    assert winners[0].status == "ready"
     with auth_database.connect() as connection:
-        assert connection.execute(select(PolicyState.revision)).scalar_one() == revision + 2
+        assert connection.execute(select(PolicyState.revision)).scalar_one() == revision + 1
+        version_ids = connection.execute(select(DocumentVersion.id)).scalars().all()
+        assert len(set(version_ids)) == 3
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM document_versions WHERE status='ready'")
+            ).scalar_one()
+            == 3
+        )
+        assert connection.execute(text("SELECT count(*) FROM chunk_embeddings")).scalar_one() == 3
         assert (
             connection.execute(
                 text("SELECT * FROM document_chunks WHERE document_version_id=:id"), {"id": source}
             ).all()
             == original_rows
         )
-        for version in versions:
+        for version_id in version_ids:
             chunks = connection.execute(
                 select(DocumentChunk.id).where(
-                    DocumentChunk.document_version_id == version.id,
+                    DocumentChunk.document_version_id == version_id,
                     DocumentChunk.document_id == registered_document.id,
                 )
             ).all()
             assert len(chunks) == 1
-        assert connection.execute(text("SELECT active_version_id FROM documents")).scalar_one() in {
-            version.id for version in versions
-        }
+        assert (
+            connection.execute(text("SELECT active_version_id FROM documents")).scalar_one()
+            == winners[0].id
+        )
 
 
 @pytest.mark.parametrize(

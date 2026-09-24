@@ -54,7 +54,7 @@ def test_admin_metadata_contains_no_content(
     parsed = DocumentVersionList.model_validate_json(versions.content)
     assert len(parsed.items) == 1
     assert parsed.items[0].id == registered_document.active_version_id
-    assert parsed.items[0].status == "chunked"
+    assert parsed.items[0].status == "ready"
     assert "PROTECTED_SYNTHETIC" not in listing.text + versions.text
     assert (
         admin_client.get(

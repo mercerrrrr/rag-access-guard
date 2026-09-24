@@ -10,7 +10,7 @@ from rag_access_guard_api.persistence import Document, DocumentVersion
 from rag_access_guard_api.schemas.documents import DocumentSummary, DocumentVersionSummary
 from rag_access_guard_api.services.audit import AuditRecord
 from rag_access_guard_api.services.errors import ForbiddenError
-from rag_access_guard_api.services.ingestion import PreparedUpload, store_version
+from rag_access_guard_api.services.ingestion import PreparedUpload, activate_version, store_version
 from rag_access_guard_api.services.security import MutationUoW, ReadUoW
 from rag_access_guard_api.services.text_documents import DocumentError, validate_title
 
@@ -60,7 +60,8 @@ async def register_text_document(
     _ = await uow.connection.execute(
         insert(Document).values(id=document_id, title=title, created_by=uow.principal.principal_id)
     )
-    _ = await store_version(uow, document_id, prepared)
+    version = await store_version(uow, document_id, prepared)
+    await activate_version(uow, version)
     row = (
         (
             await uow.connection.execute(

@@ -26,6 +26,7 @@ def test_legacy_rechunk_creates_manifest_without_editing_original(
             media_type,byte_size,parser_revision,'stored',created_by,
             ingestion_manifest || jsonb_build_object(
                 'chunker_revision',NULL,'tokenizer_revision',NULL,
+                'embedding_model_id',NULL,'embedding_model_revision',NULL,
                 'config_sha256',encode(sha256(convert_to(
                     '{"parser_revision":"utf8-text-v1"}', 'UTF8')),'hex'))
             FROM document_versions WHERE id=:source"""),
@@ -52,7 +53,7 @@ def test_legacy_rechunk_creates_manifest_without_editing_original(
 
     result = anyio.run(reprocess, backend_options={"loop_factory": create_event_loop})
     assert result.id != legacy_id
-    assert result.status == "chunked"
+    assert result.status == "ready"
     with auth_database.connect() as connection:
         assert (
             connection.execute(

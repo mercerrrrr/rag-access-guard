@@ -21,8 +21,7 @@ def test_ingestion_activates_only_complete_chunked_version(
     assert response.status_code == 200
     with auth_database.connect() as connection:
         assert (
-            connection.execute(text("SELECT status FROM document_versions")).scalar_one()
-            == "chunked"
+            connection.execute(text("SELECT status FROM document_versions")).scalar_one() == "ready"
         )
         assert connection.execute(text("SELECT count(*) FROM document_chunks")).scalar_one() == 1
 

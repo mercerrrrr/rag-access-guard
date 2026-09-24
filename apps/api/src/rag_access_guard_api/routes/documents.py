@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
-from anyio import to_thread
 from fastapi import APIRouter, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.datastructures import UploadFile
 
+from rag_access_guard_api.adapters import embeddings
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.routes.auth import AuthCookies, check_admin_mutation, check_origin
 from rag_access_guard_api.routes.uploads import read_upload
@@ -23,7 +23,7 @@ from rag_access_guard_api.services.documents import (
     register_text_document,
     update_document,
 )
-from rag_access_guard_api.services.ingestion import ingest_text_version, prepare_upload
+from rag_access_guard_api.services.indexing import ingest_text_version, prepare_index
 from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.text_documents import (
     DocumentError,
@@ -53,7 +53,9 @@ def build_documents_router(engine: AsyncEngine, settings: Settings) -> APIRouter
             ):
                 raise DocumentError(422)
             title = validate_title(title)
-            prepared = await to_thread.run_sync(prepare_upload, await read_upload(upload))
+            prepared = await prepare_index(
+                await read_upload(upload), embeddings.get_embedding_adapter()
+            )
         async with policy.mutation(credentials.session) as uow:
             check_admin_mutation(uow, credentials.csrf)
             return await register_text_document(uow, title, prepared)

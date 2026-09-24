@@ -53,8 +53,8 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
 
-      - name: Provision pinned tokenizer without model weights
-        run: bash scripts/provision-tokenizer.sh
+      - name: Provision pinned local E5 snapshot
+        run: bash scripts/provision-model.sh
 
       - name: Validate tokenizer offline
         run: uv run --frozen python -c 'from rag_access_guard_api.adapters.tokenizer import get_tokenizer; assert get_tokenizer().count("test") == 1'
@@ -83,7 +83,7 @@ jobs:
         run: |
           uv venv "${RUNNER_TEMP}/guard-venv"
           uv pip install --python "${RUNNER_TEMP}/guard-venv/bin/python" --no-deps dist/rag_access_guard-*.whl
-          "${RUNNER_TEMP}/guard-venv/bin/python" -I -c 'from importlib.util import find_spec; import rag_access_guard; assert find_spec("fastapi") is None; assert find_spec("sqlalchemy") is None; assert find_spec("rag_access_guard_api") is None'
+          "${RUNNER_TEMP}/guard-venv/bin/python" -I -c 'from importlib.util import find_spec; import rag_access_guard; assert all(find_spec(name) is None for name in ("fastapi", "sqlalchemy", "rag_access_guard_api", "torch", "transformers", "tokenizers", "pgvector"))'
 
       - name: Smoke-test API entry point
         run: |

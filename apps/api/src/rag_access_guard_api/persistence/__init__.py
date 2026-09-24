@@ -5,6 +5,7 @@ from rag_access_guard_api.persistence.auth_limits import AuthRateBucket
 from rag_access_guard_api.persistence.base import Base
 from rag_access_guard_api.persistence.chunks import DocumentChunk
 from rag_access_guard_api.persistence.documents import Document, DocumentGrant
+from rag_access_guard_api.persistence.embeddings import ChunkEmbedding
 from rag_access_guard_api.persistence.identity import Role, User, UserRole
 from rag_access_guard_api.persistence.policy import AuditEvent, PolicyState
 from rag_access_guard_api.persistence.session import Session
@@ -15,6 +16,7 @@ __all__ = [
     "AuthChallenge",
     "AuthRateBucket",
     "Base",
+    "ChunkEmbedding",
     "Document",
     "DocumentChunk",
     "DocumentGrant",

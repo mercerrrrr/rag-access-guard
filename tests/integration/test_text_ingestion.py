@@ -91,13 +91,11 @@ def test_parse_failure_preserves_active_version_and_revision(
         )
 
 
-def test_identical_upload_creates_new_versions_without_reactivating_document(
+def test_identical_upload_creates_new_versions(
     admin_client: TestClient,
     auth_database: Engine,
     registered_document: DocumentSummary,
 ) -> None:
-    with auth_database.begin() as connection:
-        _ = connection.execute(text("UPDATE documents SET is_active=false"))
     identifiers = {registered_document.active_version_id}
     for _ in range(2):
         response = admin_client.post(
@@ -112,7 +110,34 @@ def test_identical_upload_creates_new_versions_without_reactivating_document(
         identifiers.add(DocumentVersionSummary.model_validate_json(response.content).id)
     assert len(identifiers) == 3
     with auth_database.connect() as connection:
+        assert connection.execute(text("SELECT is_active FROM documents")).scalar_one() is True
+
+
+def test_upload_to_inactive_document_is_denied_without_changes(
+    admin_client: TestClient,
+    auth_database: Engine,
+    registered_document: DocumentSummary,
+) -> None:
+    with auth_database.begin() as connection:
+        _ = connection.execute(text("UPDATE documents SET is_active=false"))
+        revision = connection.execute(select(PolicyState.revision)).scalar_one()
+    response = admin_client.post(
+        f"/api/admin/documents/{registered_document.id}/versions",
+        files={"file": ("same.md", b"PROTECTED_SYNTHETIC", "text/plain")},
+        headers={
+            "Origin": "https://rag.test",
+            "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],
+        },
+    )
+    assert response.status_code == 403
+    with auth_database.connect() as connection:
         assert connection.execute(text("SELECT is_active FROM documents")).scalar_one() is False
+        assert connection.execute(text("SELECT count(*) FROM document_versions")).scalar_one() == 1
+        assert connection.execute(select(PolicyState.revision)).scalar_one() == revision
+        assert (
+            connection.execute(text("SELECT active_version_id FROM documents")).scalar_one()
+            == registered_document.active_version_id
+        )
 
 
 @pytest.mark.parametrize("missing", ["Origin", "X-CSRF-Token"])

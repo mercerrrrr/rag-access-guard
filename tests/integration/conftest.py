@@ -11,6 +11,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import make_url
 
+from rag_access_guard_api.adapters import embeddings
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.persistence import User
@@ -19,6 +20,7 @@ from rag_access_guard_api.schemas.auth import CsrfResponse
 from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.server import create_event_loop
 from rag_access_guard_api.services.passwords import hash_password
+from tests.integration.embedding_fixtures import DeterministicEmbedder
 
 
 @pytest.fixture
@@ -26,6 +28,7 @@ def auth_client(
     isolated_database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
     monkeypatch.setenv("RAG_ACCESS_GUARD_DATABASE_URL", isolated_database_url)
+    monkeypatch.setattr(embeddings, "get_embedding_adapter", DeterministicEmbedder)
     command.upgrade(Config("apps/api/alembic.ini"), "head")
     engine = create_engine(isolated_database_url)
     with engine.begin() as connection:
