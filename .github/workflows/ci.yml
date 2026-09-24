@@ -67,6 +67,13 @@ jobs:
           export RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET="$(uv run --frozen python -c 'import secrets; print(secrets.token_hex(32))')"
           uv run --frozen alembic -c apps/api/alembic.ini upgrade head
 
+      - name: Calibrate pinned E5 retrieval in temporary storage
+        run: |
+          export RAG_ACCESS_GUARD_RETRIEVAL_CONFIG_PATH="${RUNNER_TEMP}/calibration/config.json"
+          uv run --frozen python -c 'import os; from pathlib import Path; from tests.calibration_corpus import synthetic_calibration_dataset; p=Path(os.environ["RUNNER_TEMP"])/"calibration"; p.mkdir(); (p/"dataset.json").write_text(synthetic_calibration_dataset().model_dump_json(), encoding="utf-8")'
+          uv run --frozen python scripts/calibrate_retrieval.py --dataset "${RUNNER_TEMP}/calibration/dataset.json" --output "${RAG_ACCESS_GUARD_RETRIEVAL_CONFIG_PATH}"
+          echo "RAG_ACCESS_GUARD_RETRIEVAL_CONFIG_PATH=${RAG_ACCESS_GUARD_RETRIEVAL_CONFIG_PATH}" >> "${GITHUB_ENV}"
+
       - name: Run Python checks and tests
         run: |
           uv run --frozen ruff format --check .

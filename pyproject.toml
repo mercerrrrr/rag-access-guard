@@ -28,7 +28,7 @@ members = ["apps/api", "packages/rag_access_guard"]
 typeCheckingMode = "all"
 pythonVersion = "3.13"
 pythonPlatform = "All"
-include = ["apps/api/src", "tests", "packages/rag_access_guard/src", "packages/rag_access_guard/tests"]
+include = ["apps/api/src", "tests", "packages/rag_access_guard/src", "packages/rag_access_guard/tests", "scripts"]
 exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
 reportUnusedCallResult = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
@@ -54,6 +54,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ARG", "D", "INP001", "PLR2004", "S101", "SLF001"]
 "packages/*/tests/**/*.py" = ["ARG", "D", "INP001", "PLR2004", "S101", "SLF001"]
+"scripts/*.py" = ["INP001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

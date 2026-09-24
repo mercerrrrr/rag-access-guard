@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+from pathlib import Path
 from typing import ClassVar, Final, Self
 from urllib.parse import urlsplit
 
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     auth_limit_secret: SecretStr = SecretStr("")
     loopback_development: bool = False
     bind_host: str = "127.0.0.1"
+    retrieval_config_path: Path | None = None
 
     @model_validator(mode="after")
     def validate_auth_settings(self) -> Self:

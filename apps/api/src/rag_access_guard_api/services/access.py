@@ -39,6 +39,7 @@ def readable_document(principal_id: UUID) -> ColumnElement[bool]:
             DocumentVersion.id == Document.active_version_id,
             DocumentVersion.status.in_(("stored", "chunked", "ready")),
         )
+        .correlate(Document)
         .exists()
     )
     return and_(Document.is_active.is_(True), stored, granted)

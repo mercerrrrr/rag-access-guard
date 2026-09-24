@@ -14,6 +14,11 @@ from rag_access_guard_api.schemas.embedding_vectors import (
     EmbeddingError,
     VersionActivationConflictError,
 )
+from rag_access_guard_api.schemas.search import (
+    InvalidSearchError,
+    RetrievalNotConfiguredError,
+    SearchError,
+)
 from rag_access_guard_api.services.errors import (
     AlreadyAuthenticatedError,
     ForbiddenError,
@@ -32,7 +37,9 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Attach response policy after endpoint and exception processing."""
         response = await call_next(request)
-        if request.url.path.startswith(("/api/auth/", "/api/admin/", "/api/documents")):
+        if request.url.path.startswith(
+            ("/api/auth/", "/api/admin/", "/api/documents", "/api/search")
+        ):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
         return response
@@ -56,6 +63,18 @@ async def _activation_conflict(
     return JSONResponse(status_code=409, content={"detail": "Version activation conflict"})
 
 
+async def _search_unavailable(_request: Request, _: SearchError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Search unavailable"})
+
+
+async def _invalid_search(_request: Request, _: InvalidSearchError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": "Invalid query"})
+
+
+async def _search_unconfigured(_request: Request, _: RetrievalNotConfiguredError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Retrieval not configured"})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
@@ -64,11 +83,17 @@ def register_auth_errors(app: FastAPI) -> None:
     _ = app.exception_handler(EmbeddingError)(_indexing_unavailable)
     _ = app.exception_handler(VersionActivationConflictError)(_activation_conflict)
 
+    _ = app.exception_handler(SearchError)(_search_unavailable)
+    _ = app.exception_handler(InvalidSearchError)(_invalid_search)
+    _ = app.exception_handler(RetrievalNotConfiguredError)(_search_unconfigured)
+
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
         headers = (
             {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-            if request.url.path.startswith(("/api/auth/", "/api/admin/", "/api/documents"))
+            if request.url.path.startswith(
+                ("/api/auth/", "/api/admin/", "/api/documents", "/api/search")
+            )
             else None
         )
         return JSONResponse(
