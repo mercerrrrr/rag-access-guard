@@ -13,6 +13,7 @@ dev = [
     "httpx2[brotli,http2,zstd]>=2.13,<3",
     "pytest>=9.0.3,<10",
     "ruff>=0.12,<1",
+    "types-psutil>=7.2.2.20260906",
 ]
 
 [tool.uv]

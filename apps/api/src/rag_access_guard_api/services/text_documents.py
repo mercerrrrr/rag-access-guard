@@ -13,11 +13,11 @@ class DocumentError(Exception):
     """A sanitized document boundary failure."""
 
     def __init__(
-        self, status: Literal[404, 413, 415, 422], code: IngestionFailure | None = None
+        self, status: Literal[404, 413, 415, 422, 503], code: IngestionFailure | None = None
     ) -> None:
         """Retain only the public HTTP status, never submitted data."""
         super().__init__()
-        self.status: Literal[404, 413, 415, 422] = status
+        self.status: Literal[404, 413, 415, 422, 503] = status
         self.code: IngestionFailure | None = code
 
 

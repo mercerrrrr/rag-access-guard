@@ -21,6 +21,8 @@ dependencies = [
     "torch==2.8.0",
     "transformers==4.57.6",
     "pgvector==0.4.2",
+    "pypdf==6.19.0",
+    "psutil==7.2.2",
 ]
 
 [project.scripts]

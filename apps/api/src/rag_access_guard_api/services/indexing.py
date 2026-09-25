@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from rag_access_guard_api.adapters import embeddings
 from rag_access_guard_api.adapters.embeddings import EmbeddingAdapter
+from rag_access_guard_api.adapters.pdf_protocol import parser_options
 from rag_access_guard_api.persistence import Document, DocumentVersion
 from rag_access_guard_api.schemas.documents import DocumentVersionSummary
 from rag_access_guard_api.schemas.embedding_vectors import (
@@ -46,6 +47,11 @@ async def prepare_index(
     config = json.dumps(
         {
             "parser_revision": prepared.manifest.parser_revision,
+            **(
+                {"parser_options": parser_options()}
+                if prepared.parsed.media_type == "application/pdf"
+                else {}
+            ),
             "chunker_revision": prepared.manifest.chunker_revision,
             "tokenizer_revision": prepared.manifest.tokenizer_revision,
             "embedding_model_id": embedder.model_id,
@@ -181,7 +187,8 @@ async def index_document_version(  # noqa: PLR0913
             raise DocumentError(404)
         if not row[3]:
             raise ForbiddenError
-        upload = UploadPayload(filename="source.md", media_type=row[1], data=row[0])
+        filename = "source.pdf" if row[1] == "application/pdf" else "source.md"
+        upload = UploadPayload(filename=filename, media_type=row[1], data=row[0])
         expected = row[2]
     prepared = await prepare_index(upload, embedder)
     return await _publish_index(

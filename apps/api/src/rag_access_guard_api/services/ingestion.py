@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import insert, update
 
 from rag_access_guard_api.adapters.embeddings import MODEL_ID
+from rag_access_guard_api.adapters.pdf_parser import parse_pdf
+from rag_access_guard_api.adapters.pdf_protocol import parser_options
 from rag_access_guard_api.adapters.text_parser import parse_text
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION, get_tokenizer
 from rag_access_guard_api.persistence import (
@@ -38,12 +40,17 @@ class PreparedUpload:
 
 def prepare_upload(upload: UploadPayload) -> PreparedUpload:
     """Run on a worker thread, outside all database transactions."""
-    parsed = parse_text(upload)
+    parsed = parse_pdf(upload) if upload.filename.lower().endswith(".pdf") else parse_text(upload)
     tokenizer = get_tokenizer()
     chunks = chunk_text(parsed.text, tokenizer)
     config = json.dumps(
         {
             "parser_revision": parsed.parser_revision,
+            **(
+                {"parser_options": parser_options()}
+                if parsed.media_type == "application/pdf"
+                else {}
+            ),
             "chunker_revision": CHUNKER_REVISION,
             "tokenizer_revision": tokenizer.identity,
             "embedding_model_id": MODEL_ID,

@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_as_dataclass, mapped_column
 
 from rag_access_guard_api.persistence.base import Base
 from rag_access_guard_api.persistence.embedding_manifest import EMBEDDING_MANIFEST
+from rag_access_guard_api.persistence.pdf_manifest import PDF_MANIFEST, PDF_MEDIA, PDF_PARSER
 
 
 @mapped_as_dataclass(Base.registry, kw_only=True)
@@ -49,18 +50,14 @@ class DocumentVersion:
         CheckConstraint(
             "extracted_text ~ '[^[:space:]]'", name="ck_document_versions_text_nonblank"
         ),
-        CheckConstraint(
-            "media_type IN ('text/plain', 'text/markdown')", name="ck_document_versions_media_type"
-        ),
-        CheckConstraint(
-            "parser_revision = 'utf8-text-v1'", name="ck_document_versions_parser_revision"
-        ),
+        CheckConstraint(PDF_MEDIA, name="ck_document_versions_media_type"),
+        CheckConstraint(PDF_PARSER, name="ck_document_versions_parser_revision"),
         CheckConstraint(
             "status IN ('stored', 'chunked', 'indexing', 'ready', 'failed')",
             name="ck_document_versions_status",
         ),
         CheckConstraint(
-            """ingestion_manifest = jsonb_build_object(
+            """(media_type <> 'application/pdf' AND (ingestion_manifest = jsonb_build_object(
             'schema_version', 1, 'source_sha256', content_sha256, 'text_sha256', text_sha256,
             'byte_size', byte_size, 'parser_revision', parser_revision,
             'chunker_revision', NULL, 'tokenizer_revision', NULL,
@@ -79,7 +76,9 @@ class DocumentVersion:
                 || parser_revision || '","tokenizer_revision":"intfloat/multilingual-e5-small@'
                 || '614241f622f53c4eeff9890bdc4f31cfecc418b3:content-no-special"}',
                 'UTF8')), 'hex')) OR """
-            + EMBEDDING_MANIFEST,
+            + EMBEDDING_MANIFEST
+            + ")) OR "
+            + PDF_MANIFEST,
             name="ck_document_versions_manifest",
         ),
         CheckConstraint(

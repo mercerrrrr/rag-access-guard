@@ -5,6 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict
 
 type IngestionFailure = Literal[
+    "text_layer_required",
     "unsupported_type",
     "invalid_encoding",
     "empty_text",
@@ -30,6 +31,8 @@ class ParsedDocument(BaseModel):
     text: str
     parser_revision: str
     media_type: str
+    page_count: int | None = None
+    empty_page_count: int | None = None
 
 
 class IngestionManifest(BaseModel):

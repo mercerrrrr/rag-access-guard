@@ -42,6 +42,7 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
         ):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
+            response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
 
@@ -140,5 +141,9 @@ def register_auth_errors(app: FastAPI) -> None:
             413: "Upload too large",
             415: "Unsupported media type",
             422: "Invalid document",
+            503: "Service unavailable",
         }
-        return JSONResponse(status_code=error.status, content={"detail": details[error.status]})
+        detail = (
+            "Text layer required" if error.code == "text_layer_required" else details[error.status]
+        )
+        return JSONResponse(status_code=error.status, content={"detail": detail})
