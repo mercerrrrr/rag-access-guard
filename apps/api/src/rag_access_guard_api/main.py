@@ -14,6 +14,7 @@ from rag_access_guard_api.routes.access import build_access_router, build_role_r
 from rag_access_guard_api.routes.audit import build_audit_router
 from rag_access_guard_api.routes.auth import build_auth_router
 from rag_access_guard_api.routes.auth_errors import register_auth_errors
+from rag_access_guard_api.routes.chat import build_chat_router
 from rag_access_guard_api.routes.documents import build_documents_router
 from rag_access_guard_api.routes.search import build_search_router
 from rag_access_guard_api.routes.users import build_users_router
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     application = FastAPI(title="RAG Access Guard API", lifespan=lifespan)
 
     application.include_router(build_auth_router(auth, settings))
+    application.include_router(build_chat_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_documents_router(engine, settings))
     application.include_router(build_search_router(engine, settings))
     application.include_router(build_access_router(PolicyUnitOfWork(engine), settings))

@@ -3,6 +3,7 @@
 from rag_access_guard_api.persistence.auth_challenges import AuthChallenge
 from rag_access_guard_api.persistence.auth_limits import AuthRateBucket
 from rag_access_guard_api.persistence.base import Base
+from rag_access_guard_api.persistence.chat import ChatThread, ChatTurn, TurnSource
 from rag_access_guard_api.persistence.chunks import DocumentChunk
 from rag_access_guard_api.persistence.documents import Document, DocumentGrant
 from rag_access_guard_api.persistence.embeddings import ChunkEmbedding
@@ -16,6 +17,8 @@ __all__ = [
     "AuthChallenge",
     "AuthRateBucket",
     "Base",
+    "ChatThread",
+    "ChatTurn",
     "ChunkEmbedding",
     "Document",
     "DocumentChunk",
@@ -24,6 +27,7 @@ __all__ = [
     "PolicyState",
     "Role",
     "Session",
+    "TurnSource",
     "User",
     "UserRole",
 ]

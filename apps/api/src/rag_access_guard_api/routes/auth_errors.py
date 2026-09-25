@@ -19,6 +19,7 @@ from rag_access_guard_api.schemas.search import (
     RetrievalNotConfiguredError,
     SearchError,
 )
+from rag_access_guard_api.services.chat_repository import ThreadNotFound
 from rag_access_guard_api.services.errors import (
     AlreadyAuthenticatedError,
     ForbiddenError,
@@ -38,7 +39,7 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
         """Attach response policy after endpoint and exception processing."""
         response = await call_next(request)
         if request.url.path.startswith(
-            ("/api/auth/", "/api/admin/", "/api/documents", "/api/search")
+            ("/api/auth/", "/api/admin/", "/api/documents", "/api/search", "/api/chat/")
         ):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
@@ -76,6 +77,10 @@ async def _search_unconfigured(_request: Request, _: RetrievalNotConfiguredError
     return JSONResponse(status_code=503, content={"detail": "Retrieval not configured"})
 
 
+async def _thread_not_found(_request: Request, _: ThreadNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
@@ -88,12 +93,14 @@ def register_auth_errors(app: FastAPI) -> None:
     _ = app.exception_handler(InvalidSearchError)(_invalid_search)
     _ = app.exception_handler(RetrievalNotConfiguredError)(_search_unconfigured)
 
+    _ = app.exception_handler(ThreadNotFound)(_thread_not_found)
+
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
         headers = (
             {"Cache-Control": "private, no-store", "Vary": "Cookie"}
             if request.url.path.startswith(
-                ("/api/auth/", "/api/admin/", "/api/documents", "/api/search")
+                ("/api/auth/", "/api/admin/", "/api/documents", "/api/search", "/api/chat/")
             )
             else None
         )

@@ -21,6 +21,30 @@ from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.server import create_event_loop
 from rag_access_guard_api.services.passwords import hash_password
 from tests.integration.embedding_fixtures import DeterministicEmbedder
+from tests.support.chat import ChatHttp
+
+
+@pytest.fixture
+def chat_http(authenticated_client: TestClient, auth_database: Engine) -> Iterator[ChatHttp]:
+    with auth_database.begin() as connection:
+        _ = connection.execute(
+            text("""INSERT INTO users (id, login, display_name, password_hash)
+            VALUES (:id, 'other', 'Other', :hash)"""),
+            {"id": uuid4(), "hash": hash_password("Synthetic-Other-123")},
+        )
+    with TestClient(
+        create_app(),
+        base_url="https://rag.test",
+        backend_options={"loop_factory": create_event_loop},
+    ) as other:
+        csrf = CsrfResponse.model_validate_json(other.get("/api/auth/csrf").content).csrf_token
+        response = other.post(
+            "/api/auth/login",
+            json={"login": "other", "password": "Synthetic-Other-123"},
+            headers={"Origin": "https://rag.test", "X-CSRF-Token": csrf},
+        )
+        assert response.status_code == 200
+        yield ChatHttp(authenticated_client, other, auth_database)
 
 
 @pytest.fixture
