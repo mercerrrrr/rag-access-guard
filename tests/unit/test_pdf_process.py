@@ -1,6 +1,8 @@
 import json
 import sys
 from pathlib import Path
+from threading import Event, Thread
+from typing import override
 
 import psutil
 import pytest
@@ -10,6 +12,31 @@ from rag_access_guard_api.adapters import pdf_process, pdf_protocol
 from rag_access_guard_api.adapters.pdf_parser import parse_pdf
 from rag_access_guard_api.schemas.ingestion import UploadPayload
 from rag_access_guard_api.services.text_documents import DocumentError
+
+
+def test_worker_exit_before_buffered_input_flush(monkeypatch: pytest.MonkeyPatch) -> None:
+    output_closed = Event()
+
+    class OrderedThread(Thread):
+        @override
+        def run(self) -> None:
+            if self.name == "pdf-input":
+                assert output_closed.wait(timeout=5)
+            try:
+                super().run()
+            finally:
+                if self.name == "pdf-output":
+                    output_closed.set()
+
+    command = (
+        sys.executable,
+        "-I",
+        "-c",
+        "import os,sys; os.close(0); os.close(1); sys.exit(17)",
+    )
+    monkeypatch.setattr(pdf_process, "_worker_command", lambda: command)
+    monkeypatch.setattr(pdf_process, "Thread", OrderedThread)
+    assert pdf_process.run_worker(b"%PDF-small-input") == (17, b"")
 
 
 @pytest.mark.parametrize("case", ["timeout", "output", "memory", "crash", "no-read"])

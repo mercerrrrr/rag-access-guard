@@ -46,7 +46,8 @@ def _write(pipe: BinaryIO, data: bytes) -> None:
     except OSError:
         pass
     finally:
-        pipe.close()
+        with suppress(OSError):
+            pipe.close()
 
 
 def run_worker(data: bytes) -> tuple[int, bytes]:
