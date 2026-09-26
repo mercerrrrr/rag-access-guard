@@ -6,8 +6,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from rag_access_guard_api.adapters.llm import FakeTokenCounter
-
 MAX_INPUT_BYTES: Final = 16384
 MAX_INPUT_TOKENS: Final = 1024
 
@@ -114,12 +112,7 @@ class MessageRequest(BaseModel):
     @classmethod
     def bounded_input(cls, value: str) -> str:
         """Reject oversized or non-text PostgreSQL input without truncating it."""
-        if (
-            not value.strip()
-            or "\x00" in value
-            or len(value.encode("utf-8")) > MAX_INPUT_BYTES
-            or FakeTokenCounter().count(value) > MAX_INPUT_TOKENS
-        ):
+        if not value.strip() or "\x00" in value or len(value.encode("utf-8")) > MAX_INPUT_BYTES:
             message = "Invalid user input"
             raise ValueError(message)
         return value

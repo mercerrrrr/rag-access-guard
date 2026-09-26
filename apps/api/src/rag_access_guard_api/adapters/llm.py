@@ -2,13 +2,18 @@
 
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, assert_never
 
+from rag_access_guard import TokenCounter
+from rag_access_guard_api.adapters.model_tokens import get_model_counter
+from rag_access_guard_api.adapters.ollama import OllamaAdapter
+from rag_access_guard_api.adapters.ollama_http import create_client
+from rag_access_guard_api.adapters.ollama_identity import verify_model
 from rag_access_guard_api.config import Settings
+from rag_access_guard_api.schemas.generation import GenerationUnavailable
+from rag_access_guard_api.services.model_manifest import ModelManifest
 
-
-class LLMUnavailableError(Exception):
-    """No usable generation result is available."""
+LLMUnavailableError = GenerationUnavailable
 
 
 class LLMAdapter(Protocol):
@@ -46,6 +51,35 @@ class FakeLLMAdapter:
 
 def get_llm_adapter() -> LLMAdapter:
     """Require explicit server configuration; clients cannot choose a model mode."""
-    if Settings().llm_adapter != "fake":
-        raise LLMUnavailableError
-    return FakeLLMAdapter()
+    settings = Settings()
+    match settings.llm_adapter:
+        case "fake":
+            return FakeLLMAdapter()
+        case "ollama":
+            return OllamaAdapter(base_url=settings.ollama_base_url)
+        case "disabled":
+            raise LLMUnavailableError
+        case _:
+            assert_never(settings.llm_adapter)
+
+
+def get_token_counter() -> TokenCounter | None:
+    """Never apply synthetic token counts to a real model."""
+    mode = Settings().llm_adapter
+    match mode:
+        case "fake":
+            return FakeTokenCounter()
+        case "ollama":
+            return get_model_counter()
+        case "disabled":
+            return None
+        case _:
+            assert_never(mode)
+
+
+async def initialize_llm(settings: Settings) -> None:
+    """Real generation requires a verified local tokenizer and model at startup."""
+    if settings.llm_adapter == "ollama":
+        _ = get_model_counter()
+        async with create_client(settings.ollama_base_url) as client:
+            await verify_model(client, ModelManifest())

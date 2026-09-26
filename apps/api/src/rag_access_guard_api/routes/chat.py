@@ -5,9 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 
+from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.routes.auth import AuthCookies, check_origin
 from rag_access_guard_api.schemas.chat import (
+    MAX_INPUT_TOKENS,
     CreateThread,
     MessageRequest,
     MessageResponse,
@@ -83,6 +85,12 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
         if request.query_params:
             raise HTTPException(422, "Invalid request")
         credentials = cookies.credentials(request)
+        try:
+            counter = llm.get_token_counter()
+        except llm.LLMUnavailableError:
+            raise HTTPException(503, "Service unavailable") from None
+        if counter is not None and counter.count(payload.user_input) > MAX_INPUT_TOKENS:
+            raise HTTPException(422, "Invalid user input")
         result = await ChatService(policy, credentials.csrf).generate_turn(
             credentials.session, thread_id, payload
         )

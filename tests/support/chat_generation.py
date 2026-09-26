@@ -90,6 +90,7 @@ def chat_case(  # noqa: PLR0913, PLR0917 -- distinct existing fixture resources.
     configure_search(tmp_path / "calibration.json", monkeypatch)
     model = CapturingLLM()
     monkeypatch.setattr(llm, "get_llm_adapter", lambda: model)
+    monkeypatch.setattr(llm, "get_token_counter", llm.FakeTokenCounter)
     response = admin_client.post("/api/chat/threads", json={}, headers=ChatHttp.csrf(admin_client))
     assert response.status_code == 201
     thread = ThreadView.model_validate_json(response.content).id

@@ -33,7 +33,27 @@ class Settings(BaseSettings):
     loopback_development: bool = False
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
-    llm_adapter: Literal["disabled", "fake"] = "disabled"
+    llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+
+    @model_validator(mode="after")
+    def validate_ollama_url(self) -> Self:
+        """This prototype sends protected data only to a local, operator-set endpoint."""
+        url = urlsplit(self.ollama_base_url)
+        if (
+            url.scheme != "http"
+            or not url.hostname
+            or not is_loopback(url.hostname)
+            or url.username
+            or url.password
+            or url.path
+            or url.query
+            or url.fragment
+            or url.port is None
+        ):
+            message = "Ollama requires an HTTP loopback origin with explicit port"
+            raise ValueError(message)
+        return self
 
     @model_validator(mode="after")
     def validate_auth_settings(self) -> Self:

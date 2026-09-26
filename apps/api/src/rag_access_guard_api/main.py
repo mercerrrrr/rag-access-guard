@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
+from rag_access_guard_api.adapters.llm import initialize_llm
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine, is_database_ready
 from rag_access_guard_api.routes.access import build_access_router, build_role_router
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         try:
             await auth.initialize()
+            await initialize_llm(settings)
             yield
         finally:
             await engine.dispose()

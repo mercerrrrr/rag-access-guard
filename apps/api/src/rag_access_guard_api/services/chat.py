@@ -6,7 +6,7 @@ from uuid import UUID
 
 import anyio
 
-from rag_access_guard import Guard, PreparedContext, PrepareDenied
+from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
 from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
@@ -40,6 +40,7 @@ class Generated:
 
     attempt: GenerationAttempt
     body: str = field(repr=False)
+    counter: TokenCounter
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +86,9 @@ class ChatService:
     ) -> Generated | Neutral:
         try:
             adapter = llm.get_llm_adapter()
+            counter = llm.get_token_counter()
+            if counter is None:
+                return Neutral(reservation, "generation_unavailable")
             with anyio.fail_after(60):
                 vector = await embeddings.get_embedding_adapter().embed_query(user_input)
                 async with self.policy.protected_read(session_token) as uow:
@@ -92,7 +96,7 @@ class ChatService:
                     if uow.principal.session_id != reservation.session_id:
                         raise ForbiddenError
                     chunks = await retrieve(uow, vector)
-                    prepared = await Guard(llm.FakeTokenCounter()).prepare_context(
+                    prepared = await Guard(counter).prepare_context(
                         reservation.principal_id,
                         chunks,
                         (),
@@ -121,7 +125,7 @@ class ChatService:
                             or len(body.encode("utf-8")) > MAX_ANSWER_BYTES
                         ):
                             return Neutral(reservation, "generation_unavailable")
-                        return Generated(attempt, body)
+                        return Generated(attempt, body, counter)
                     case _:
                         assert_never(prepared)
         except (llm.LLMUnavailableError, EmbeddingError, SearchError, TimeoutError):
@@ -155,7 +159,7 @@ class ChatService:
             if turn.lease_expires_at is not None and now < turn.lease_expires_at:
                 match outcome:
                     case Generated(attempt=generated, body=body):
-                        release = await Guard(llm.FakeTokenCounter()).authorize_release(
+                        release = await Guard(outcome.counter).authorize_release(
                             generated.principal_id,
                             generated.thread_id,
                             generated.prepared,

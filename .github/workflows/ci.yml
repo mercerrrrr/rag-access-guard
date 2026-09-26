@@ -59,6 +59,9 @@ jobs:
       - name: Validate tokenizer offline
         run: uv run --frozen python -c 'from rag_access_guard_api.adapters.tokenizer import get_tokenizer; assert get_tokenizer().count("test") == 1'
 
+      - name: Provision pinned generation tokenizer without model weights
+        run: bash scripts/provision-model-tokenizer.sh
+
       - name: Start PostgreSQL
         run: docker compose up --detach --wait postgres
 
