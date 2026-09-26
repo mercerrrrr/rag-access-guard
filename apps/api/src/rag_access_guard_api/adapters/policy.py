@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 
 from rag_access_guard import PolicySnapshot, SourceRef
 from rag_access_guard_api.adapters.canonical import CanonicalChunk, canonical_query
-from rag_access_guard_api.persistence import Document, DocumentChunk, DocumentVersion
+from rag_access_guard_api.persistence import ChatThread, Document, DocumentChunk, DocumentVersion
 from rag_access_guard_api.schemas.search import InvalidProvenanceError
 from rag_access_guard_api.services.access import readable_document
 from rag_access_guard_api.services.security import ReadUoW
@@ -39,6 +39,20 @@ class PostgresPolicyReader:
             and self.uow.connection.in_transaction()
             and principal_id == self.uow.principal.principal_id
         )
+        owned = None
+        if thread_id is not None:
+            owned = (
+                live
+                and (
+                    await self.uow.connection.execute(
+                        select(ChatThread.id).where(
+                            ChatThread.id == thread_id,
+                            ChatThread.owner_user_id == principal_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                is not None
+            )
         allowed: list[SourceRef] = []
         denied: list[SourceRef] = []
         hashes: list[tuple[SourceRef, str]] = []
@@ -73,7 +87,7 @@ class PostgresPolicyReader:
                     valid = False
                     denied.append(ref)
                     continue
-                if canonical.allowed and thread_id is None:
+                if canonical.allowed and owned is not False:
                     allowed.append(ref)
                     hashes.append((ref, candidate.content_sha256))
                 else:
@@ -87,6 +101,6 @@ class PostgresPolicyReader:
             denied_refs=tuple(denied),
             provenance_valid=valid,
             principal_active=live,
-            thread_owned=None if thread_id is None else False,
+            thread_owned=owned,
             canonical_chunk_hashes=tuple(hashes),
         )

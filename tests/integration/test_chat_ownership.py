@@ -170,7 +170,7 @@ def test_query_identity_cannot_override_session(chat_http: ChatHttp) -> None:
     assert response.json() == {"detail": "Invalid request"}
 
 
-def test_generation_route_is_not_exposed(chat_http: ChatHttp) -> None:
+def test_generation_route_rejects_client_supplied_answer(chat_http: ChatHttp) -> None:
     created = ThreadView.model_validate_json(
         chat_http.owner.post(
             "/api/chat/threads", json={}, headers=chat_http.csrf(chat_http.owner)
@@ -181,5 +181,5 @@ def test_generation_route_is_not_exposed(chat_http: ChatHttp) -> None:
         json={"answer": "injected"},
         headers=chat_http.csrf(chat_http.owner),
     )
-    assert response.status_code == 404
+    assert response.status_code == 422
     assert response.headers["cache-control"] == "private, no-store"

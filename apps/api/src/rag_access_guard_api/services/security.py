@@ -136,6 +136,16 @@ async def _gate(connection: AsyncConnection, digest: bytes, revision: int) -> Re
     )
 
 
+async def revalidate_session(uow: ReadUoW, session_token: str) -> None:
+    """Recheck wall-clock expiry after resource waits within the same locked transaction."""
+    digest = token_digest(session_token)
+    if digest is None:
+        raise UnauthenticatedError
+    current = await _gate(uow.connection, digest, uow.revision)
+    if current.principal != uow.principal:
+        raise UnauthenticatedError
+
+
 class PolicyUnitOfWork:
     """Every protected operation reacquires policy, session and user state."""
 

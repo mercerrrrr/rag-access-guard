@@ -1,10 +1,15 @@
 """Chat metadata and protected turn projections, separate from stored records."""
 
 from datetime import datetime
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, ClassVar, Final, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from rag_access_guard_api.adapters.llm import FakeTokenCounter
+
+MAX_INPUT_BYTES: Final = 16384
+MAX_INPUT_TOKENS: Final = 1024
 
 
 class CreateThread(BaseModel):
@@ -95,3 +100,35 @@ class ThreadDetail(ThreadView):
     """A conversation detail with explicitly projected turns."""
 
     turns: tuple[TurnView, ...]
+
+
+class MessageRequest(BaseModel):
+    """Exact retry payload; session identity and provenance are never client fields."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    request_id: UUID
+    expected_thread_revision: Annotated[int, Field(ge=0, strict=True)]
+    user_input: str
+
+    @field_validator("user_input")
+    @classmethod
+    def bounded_input(cls, value: str) -> str:
+        """Reject oversized or non-text PostgreSQL input without truncating it."""
+        if (
+            not value.strip()
+            or "\x00" in value
+            or len(value.encode("utf-8")) > MAX_INPUT_BYTES
+            or FakeTokenCounter().count(value) > MAX_INPUT_TOKENS
+        ):
+            message = "Invalid user input"
+            raise ValueError(message)
+        return value
+
+
+class MessageResponse(BaseModel):
+    """A committed turn, or a freshly reauthorized replay."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    thread_revision: int
+    turn: TurnView
+    replayed: bool

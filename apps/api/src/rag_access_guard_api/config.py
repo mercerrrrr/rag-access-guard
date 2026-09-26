@@ -3,7 +3,7 @@
 import ipaddress
 import re
 from pathlib import Path
-from typing import ClassVar, Final, Self
+from typing import ClassVar, Final, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import PostgresDsn, SecretStr, model_validator
@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     loopback_development: bool = False
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
+    llm_adapter: Literal["disabled", "fake"] = "disabled"
 
     @model_validator(mode="after")
     def validate_auth_settings(self) -> Self:
