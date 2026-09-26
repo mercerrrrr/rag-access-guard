@@ -75,7 +75,17 @@ class ChatService:
                 return reserved
             case Reservation():
                 outcome = await self._generate(session_token, reserved, request.user_input)
-                return await self._complete(session_token, outcome)
+                expected: Reservation = reserved
+                if isinstance(outcome, Generated):
+                    expected = GenerationAttempt(
+                        reserved.principal_id,
+                        reserved.session_id,
+                        reserved.thread_id,
+                        reserved.request_id,
+                        reserved.thread_revision,
+                        outcome.attempt.prepared,
+                    )
+                return await self._complete(session_token, outcome, expected_attempt=expected)
             case _:
                 assert_never(reserved)
 
@@ -137,9 +147,15 @@ class ChatService:
             return Neutral(reservation, "generation_unavailable")
 
     async def _complete(
-        self, session_token: str, outcome: Generated | Neutral
+        self,
+        session_token: str,
+        outcome: Generated | Neutral,
+        *,
+        expected_attempt: Reservation,
     ) -> MessageResponse | ChatConflict:
         attempt = outcome.attempt
+        if attempt != expected_attempt:
+            raise ForbiddenError
         async with self.policy.protected_read(session_token) as uow:
             if (
                 uow.principal.principal_id != attempt.principal_id

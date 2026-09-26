@@ -64,7 +64,7 @@ def test_session_expiry_while_waiting_for_thread_denies_read_and_write(
             self, session_token: str, reservation: Reservation, user_input: str
         ) -> chat.Generated | chat.Neutral:
             outcome = await super()._generate(session_token, reservation, user_input)
-            _ = await self._complete(session_token, outcome)
+            _ = await self._complete(session_token, outcome, expected_attempt=outcome.attempt)
             completed.set()
             assert await run_sync(finish_worker.wait, 10)
             return outcome

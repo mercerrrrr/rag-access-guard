@@ -7,7 +7,7 @@ from uuid import UUID
 
 from rag_access_guard._policy import valid_provenance
 from rag_access_guard._validation import require_nonnegative
-from rag_access_guard.context import bound_context, matches_canonical
+from rag_access_guard.context import bound_context, matches_canonical, valid_structure
 from rag_access_guard.fingerprint import fingerprint
 from rag_access_guard.history import filter_history
 from rag_access_guard.ports import PolicyReader, TokenCounter
@@ -108,7 +108,19 @@ class Guard:
         policy_reader: PolicyReader,
     ) -> ReleaseDecision:
         """Recheck ownership, current policy and canonical context at the release gate."""
-        if not prepared.source_refs or len(set(prepared.source_refs)) != len(prepared.source_refs):
+        if (
+            not prepared.source_refs
+            or len(set(prepared.source_refs)) != len(prepared.source_refs)
+            or prepared.fingerprint
+            != fingerprint(
+                prepared,
+                self.token_counter.identity,
+                self.max_context_tokens,
+                max_prior_turns=self.max_prior_turns,
+            )
+            or not valid_structure(prepared)
+            or self.token_counter.count(prepared.model_context) > self.max_context_tokens
+        ):
             return ReleaseDecision(allowed=False, reason="invalid_provenance", policy_revision=None)
         try:
             snapshot = await policy_reader.snapshot(
@@ -123,23 +135,13 @@ class Guard:
             or snapshot.thread_owned is not True
         ):
             reason = "denied"
-        elif snapshot.revision != prepared.policy_revision:
-            reason = "stale_revision"
         elif not valid_provenance(snapshot, prepared.source_refs):
             reason = "invalid_provenance"
+        elif snapshot.revision != prepared.policy_revision:
+            reason = "stale_revision"
         elif snapshot.denied_refs:
             reason = "denied"
-        elif (
-            prepared.fingerprint
-            != fingerprint(
-                prepared,
-                self.token_counter.identity,
-                self.max_context_tokens,
-                max_prior_turns=self.max_prior_turns,
-            )
-            or self.token_counter.count(prepared.model_context) > self.max_context_tokens
-            or not matches_canonical(prepared, snapshot)
-        ):
+        elif not matches_canonical(prepared, snapshot):
             reason = "invalid_provenance"
         return ReleaseDecision(
             allowed=reason == "allowed", reason=reason, policy_revision=snapshot.revision

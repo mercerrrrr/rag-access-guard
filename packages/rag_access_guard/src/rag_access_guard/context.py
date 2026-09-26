@@ -170,7 +170,7 @@ def _context(text: str) -> dict[str, JsonValue] | None:
         value = _decode(json.loads, text)
     except (ValueError, RecursionError):
         return None
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or type(value.get("version")) is not int:
         return None
     if not (
         (set(value) == {"version", "chunks"} and value["version"] == 1)
@@ -184,40 +184,54 @@ def _context(text: str) -> dict[str, JsonValue] | None:
 
 def matches_history(prepared: PreparedContext, canonical: tuple[PriorTurn, ...]) -> bool:
     """Let the host bind serialized historical bodies to its own canonical rows."""
-    value = _context(prepared.model_context)
-    if value is None:
+    parsed = _parse(prepared)
+    if parsed is None:
         return False
-    history = _history(value.get("history", []))
-    if history is None:
-        return False
+    _, history = parsed
     selected_ids = {t.turn_id for t in history}
     return history == tuple(t for t in canonical if t.turn_id in selected_ids)
 
 
-def matches_canonical(prepared: PreparedContext, snapshot: PolicySnapshot) -> bool:  # noqa: PLR0911
-    """Check the serialized text against canonical hashes, not caller-supplied hashes."""
+def _parse(
+    prepared: PreparedContext,
+) -> tuple[tuple[tuple[SourceRef, str], ...], tuple[PriorTurn, ...]] | None:
     value = _context(prepared.model_context)
     if value is None:
-        return False
+        return None
     entries = value["chunks"]
     if not isinstance(entries, list):
-        return False
-    hashes = dict(snapshot.canonical_chunk_hashes)
-    sources: list[SourceRef] = []
+        return None
+    chunks: list[tuple[SourceRef, str]] = []
     for entry in entries:
         if not isinstance(entry, list) or len(entry) != 4:  # noqa: PLR2004 -- three IDs and text.
-            return False
+            return None
         content = entry[3]
         ref = _source_ref(entry[:3])
         if not isinstance(content, str) or ref is None:
-            return False
-        if sha256(content.encode("utf-8")).hexdigest() != hashes.get(ref):
-            return False
-        sources.append(ref)
+            return None
+        chunks.append((ref, content))
     history = _history(value.get("history", []))
     if history is None:
-        return False
+        return None
+    sources = [ref for ref, _ in chunks]
     sources.extend(ref for turn in history for ref in turn.source_refs)
-    return tuple(dict.fromkeys(sources)) == prepared.source_refs and all(
-        ref in hashes for ref in sources
+    return (
+        (tuple(chunks), history) if tuple(dict.fromkeys(sources)) == prepared.source_refs else None
+    )
+
+
+def valid_structure(prepared: PreparedContext) -> bool:
+    """Validate local encoding and reference closure without granting access."""
+    return _parse(prepared) is not None
+
+
+def matches_canonical(prepared: PreparedContext, snapshot: PolicySnapshot) -> bool:
+    """Check the serialized text against canonical hashes, not caller-supplied hashes."""
+    parsed = _parse(prepared)
+    if parsed is None:
+        return False
+    chunks, _ = parsed
+    hashes = dict(snapshot.canonical_chunk_hashes)
+    return all(ref in hashes for ref in prepared.source_refs) and all(
+        sha256(content.encode("utf-8")).hexdigest() == hashes.get(ref) for ref, content in chunks
     )
