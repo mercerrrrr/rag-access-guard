@@ -7,7 +7,7 @@ from uuid import UUID
 
 from rag_access_guard._policy import valid_provenance
 from rag_access_guard._validation import require_nonnegative
-from rag_access_guard.context import context_refs, matches_canonical, render
+from rag_access_guard.context import bound_context, matches_canonical
 from rag_access_guard.fingerprint import fingerprint
 from rag_access_guard.history import filter_history
 from rag_access_guard.ports import PolicyReader, TokenCounter
@@ -77,34 +77,28 @@ class Guard:
                 history = filtered
             case _:
                 assert_never(filtered)
-        chunks, history = self._bounded(chunks, history)
+        bounded = bound_context(
+            chunks,
+            history,
+            token_counter=self.token_counter,
+            max_context_tokens=self.max_context_tokens,
+            max_prior_turns=self.max_prior_turns,
+        )
         prepared = PreparedContext(
-            model_context=render(chunks, history) if chunks or history else "",
-            source_refs=context_refs(chunks, history),
+            model_context=bounded.model_context,
+            source_refs=bounded.source_refs,
             policy_revision=snapshot.revision,
             fingerprint="0" * 64,
         )
         return replace(
             prepared,
-            fingerprint=fingerprint(prepared, self.token_counter.identity, self.max_context_tokens),
+            fingerprint=fingerprint(
+                prepared,
+                self.token_counter.identity,
+                self.max_context_tokens,
+                max_prior_turns=self.max_prior_turns,
+            ),
         )
-
-    def _bounded(
-        self, chunks: tuple[CandidateChunk, ...], history: tuple[PriorTurn, ...]
-    ) -> tuple[tuple[CandidateChunk, ...], tuple[PriorTurn, ...]]:
-        kept_history = history
-        kept_chunks = chunks
-        while (
-            kept_history
-            and self.token_counter.count(render(kept_chunks, kept_history))
-            > self.max_context_tokens
-        ):
-            kept_history = kept_history[1:]
-        while (
-            kept_chunks and self.token_counter.count(render(kept_chunks)) > self.max_context_tokens
-        ):
-            kept_chunks = kept_chunks[:-1]
-        return kept_chunks, kept_history
 
     async def authorize_release(
         self,
@@ -137,7 +131,12 @@ class Guard:
             reason = "denied"
         elif (
             prepared.fingerprint
-            != fingerprint(prepared, self.token_counter.identity, self.max_context_tokens)
+            != fingerprint(
+                prepared,
+                self.token_counter.identity,
+                self.max_context_tokens,
+                max_prior_turns=self.max_prior_turns,
+            )
             or self.token_counter.count(prepared.model_context) > self.max_context_tokens
             or not matches_canonical(prepared, snapshot)
         ):

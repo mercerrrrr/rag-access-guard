@@ -91,7 +91,9 @@ async def test_duplicate_json_field_cannot_hide_additional_model_context() -> No
             1,
         ),
     )
-    forged = replace(forged, fingerprint=fingerprint(forged, Counter().identity, 5000))
+    forged = replace(
+        forged, fingerprint=fingerprint(forged, Counter().identity, 5000, max_prior_turns=4)
+    )
     release = await guard.authorize_release(UUID(int=1), UUID(int=5), forged, reader())
     assert not release.allowed
     assert release.reason == "invalid_provenance"
@@ -119,7 +121,10 @@ async def test_release_rejects_changed_binding(change: str) -> None:
             prepared,
             model_context=prepared.model_context.replace("PUBLIC_MARKER", "PRIVATE_MARKER"),
         )
-        prepared = replace(prepared, fingerprint=fingerprint(prepared, Counter().identity, 5000))
+        prepared = replace(
+            prepared,
+            fingerprint=fingerprint(prepared, Counter().identity, 5000, max_prior_turns=4),
+        )
     else:
         prepared = replace(prepared, source_refs=())
     release = await guard.authorize_release(UUID(int=1), UUID(int=5), prepared, policy)

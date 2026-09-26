@@ -2,10 +2,13 @@
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Final
 from uuid import UUID
 
+from rag_access_guard._validation import require_nonnegative
+from rag_access_guard.ports import TokenCounter
 from rag_access_guard.types import (
     CandidateChunk,
     PolicySnapshot,
@@ -16,6 +19,15 @@ from rag_access_guard.types import (
 
 type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 HISTORY_VERSION: Final = 2
+RENDERER_REVISION: Final = "rag-access-guard/context/v2"
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedContext:
+    """Serialized data and its exact closure, without an authorization decision."""
+
+    model_context: str = field(repr=False)
+    source_refs: tuple[SourceRef, ...]
 
 
 def _decode(decoder: Callable[[str], JsonValue], text: str) -> JsonValue:
@@ -34,7 +46,7 @@ def context_refs(
     )
 
 
-def render(chunks: tuple[CandidateChunk, ...], history: tuple[PriorTurn, ...] = ()) -> str:
+def render_context(chunks: tuple[CandidateChunk, ...], history: tuple[PriorTurn, ...]) -> str:
     """Encode untrusted document text as data, preserving chunk boundaries."""
     value: dict[str, JsonValue] = {
         "version": HISTORY_VERSION if history else 1,
@@ -67,6 +79,30 @@ def render(chunks: tuple[CandidateChunk, ...], history: tuple[PriorTurn, ...] = 
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def bound_context(
+    chunks: tuple[CandidateChunk, ...],
+    history: tuple[PriorTurn, ...],
+    *,
+    token_counter: TokenCounter,
+    max_context_tokens: int = 5000,
+    max_prior_turns: int = 4,
+) -> BoundedContext:
+    """Trim whole serialized pairs before ranked chunks; callers must authorize inputs first."""
+    require_nonnegative(max_context_tokens)
+    require_nonnegative(max_prior_turns)
+    kept_chunks = chunks
+    kept_history = history[-max_prior_turns:] if max_prior_turns else ()
+    while kept_chunks or kept_history:
+        rendered = render_context(kept_chunks, kept_history)
+        if token_counter.count(rendered) <= max_context_tokens:
+            return BoundedContext(rendered, context_refs(kept_chunks, kept_history))
+        if kept_history:
+            kept_history = kept_history[1:]
+        else:
+            kept_chunks = kept_chunks[:-1]
+    return BoundedContext("", ())
 
 
 def _source_ref(value: JsonValue) -> SourceRef | None:
