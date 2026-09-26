@@ -101,13 +101,14 @@ async def complete_turn(
                     lease_expires_at=None,
                 )
             )
-            for ref in dict.fromkeys(refs):
+            for position, ref in enumerate(dict.fromkeys(refs)):
                 _ = await uow.connection.execute(
                     insert(TurnSource).values(
                         turn_id=turn.id,
                         document_id=ref.document_id,
                         document_version_id=ref.document_version_id,
                         chunk_id=ref.chunk_id,
+                        position=position,
                     )
                 )
             count = len(set(refs))

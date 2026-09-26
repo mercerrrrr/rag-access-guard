@@ -17,6 +17,7 @@ from rag_access_guard_api.schemas.chat import (
 )
 from rag_access_guard_api.services.chat_state import StoredTurn, neutral_view
 from rag_access_guard_api.services.security import ReadUoW, database_clock
+from rag_access_guard_api.services.sources import build_source_url
 
 
 async def read_turn(uow: ReadUoW, turn: StoredTurn) -> TurnView:
@@ -48,6 +49,7 @@ async def _read_answer(uow: ReadUoW, turn: StoredTurn) -> TurnView:
             )
             .where(TurnSource.turn_id == turn.id)
             .order_by(
+                TurnSource.position.asc().nulls_last(),
                 TurnSource.document_id,
                 TurnSource.document_version_id,
                 TurnSource.chunk_id,
@@ -86,5 +88,5 @@ async def _source(uow: ReadUoW, ref: SourceRef) -> SourceView:
         document_version_id=ref.document_version_id,
         chunk_id=ref.chunk_id,
         title=title,
-        url=f"/api/documents/{ref.document_id}/versions/{ref.document_version_id}/content?chunk_id={ref.chunk_id}",
+        url=build_source_url(ref),
     )

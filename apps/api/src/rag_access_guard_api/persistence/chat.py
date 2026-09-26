@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     LargeBinary,
     Text,
     UniqueConstraint,
@@ -101,7 +102,11 @@ class TurnSource:
     """Canonical chunk witness for the answer, never a separate user-input source."""
 
     __tablename__: ClassVar[str] = "turn_sources"
-    __table_args__: ClassVar[tuple[ForeignKeyConstraint, ...]] = (
+    __table_args__: ClassVar[
+        tuple[ForeignKeyConstraint | CheckConstraint | UniqueConstraint, ...]
+    ] = (
+        CheckConstraint("position >= 0", name="ck_turn_sources_position"),
+        UniqueConstraint("turn_id", "position", name="uq_turn_sources_position"),
         ForeignKeyConstraint(
             ["document_id", "document_version_id", "chunk_id"],
             [
@@ -119,3 +124,4 @@ class TurnSource:
     document_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     document_version_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     chunk_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    position: Mapped[int | None] = mapped_column(Integer, default=None)

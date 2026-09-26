@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, text
 
-from rag_access_guard_api.persistence import PolicyState
+from rag_access_guard_api.persistence import DocumentChunk, PolicyState
 from rag_access_guard_api.schemas.auth import CsrfResponse
 from rag_access_guard_api.schemas.documents import (
     DocumentList,
@@ -45,7 +45,7 @@ def test_non_admin_cannot_manage_registry(
 
 
 def test_admin_metadata_contains_no_content(
-    admin_client: TestClient, registered_document: DocumentSummary
+    admin_client: TestClient, registered_document: DocumentSummary, auth_database: Engine
 ) -> None:
     listing = admin_client.get("/api/admin/documents")
     assert listing.status_code == 200
@@ -60,8 +60,17 @@ def test_admin_metadata_contains_no_content(
         admin_client.get(
             f"/api/documents/{registered_document.id}/versions/{registered_document.active_version_id}/content"
         ).status_code
-        == 404
+        == 422
     )
+    with auth_database.connect() as connection:
+        chunk = connection.execute(
+            select(DocumentChunk.id).where(DocumentChunk.document_id == registered_document.id)
+        ).scalar_one()
+    denied = admin_client.get(
+        f"/api/documents/{registered_document.id}/versions/{registered_document.active_version_id}/content?chunk_id={chunk}"
+    )
+    assert denied.status_code == 404
+    assert denied.json() == {"detail": "Not found"}
     assert versions.headers["cache-control"] == "private, no-store"
 
 

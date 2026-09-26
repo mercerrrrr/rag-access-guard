@@ -17,6 +17,7 @@ from rag_access_guard_api.routes.auth_errors import register_auth_errors
 from rag_access_guard_api.routes.chat import build_chat_router
 from rag_access_guard_api.routes.documents import build_documents_router
 from rag_access_guard_api.routes.search import build_search_router
+from rag_access_guard_api.routes.sources import build_sources_router
 from rag_access_guard_api.routes.users import build_users_router
 from rag_access_guard_api.services.auth import AuthService
 from rag_access_guard_api.services.security import PolicyUnitOfWork
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     application.include_router(build_documents_router(engine, settings))
     application.include_router(build_search_router(engine, settings))
     application.include_router(build_access_router(PolicyUnitOfWork(engine), settings))
+    application.include_router(build_sources_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_role_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_users_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_audit_router(PolicyUnitOfWork(engine), settings))
