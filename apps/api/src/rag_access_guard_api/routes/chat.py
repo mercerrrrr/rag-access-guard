@@ -91,9 +91,12 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
             raise HTTPException(503, "Service unavailable") from None
         if counter is not None and counter.count(payload.user_input) > MAX_INPUT_TOKENS:
             raise HTTPException(422, "Invalid user input")
-        result = await ChatService(policy, credentials.csrf).generate_turn(
-            credentials.session, thread_id, payload
-        )
+        result = await ChatService(
+            policy,
+            credentials.csrf,
+            generation_timeout_seconds=settings.generation_timeout_seconds,
+            pending_lease_seconds=settings.pending_lease_seconds,
+        ).generate_turn(credentials.session, thread_id, payload)
         match result:
             case ChatConflict(reason=reason):
                 raise HTTPException(409, reason)

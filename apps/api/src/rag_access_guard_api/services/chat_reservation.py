@@ -3,6 +3,7 @@
 from typing import assert_never
 from uuid import UUID
 
+from rag_access_guard_api.config import PENDING_LEASE_SECONDS
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.services.chat_read import read_turn
 from rag_access_guard_api.services.chat_repository import get_owned_thread
@@ -17,6 +18,7 @@ async def reserve(  # noqa: PLR0911 -- each protocol outcome is explicit.
     request: MessageRequest,
     *,
     session_token: str,
+    lease_seconds: int = PENDING_LEASE_SECONDS,
 ) -> Reservation | MessageResponse | ChatConflict:
     """Resolve retries before optimistic revision, and commit expiry before any conflict."""
     thread = await get_owned_thread(uow, thread_id, lock=True)
@@ -52,7 +54,7 @@ async def reserve(  # noqa: PLR0911 -- each protocol outcome is explicit.
             revision = await complete_turn(uow, turn, "interrupted")
     if request.expected_thread_revision != revision:
         return ChatConflict("thread_conflict")
-    await insert_pending(uow, thread_id, request)
+    await insert_pending(uow, thread_id, request, lease_seconds=lease_seconds)
     return Reservation(
         uow.principal.principal_id,
         uow.principal.session_id,

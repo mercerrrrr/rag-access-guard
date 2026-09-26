@@ -10,6 +10,11 @@ from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
 from rag_access_guard.context import matches_history
 from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
+from rag_access_guard_api.config import (
+    GENERATION_MAX_ATTEMPTS,
+    GENERATION_TIMEOUT_SECONDS,
+    PENDING_LEASE_SECONDS,
+)
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
@@ -27,6 +32,7 @@ from rag_access_guard_api.services.errors import ForbiddenError
 from rag_access_guard_api.services.retrieval import retrieve
 from rag_access_guard_api.services.security import (
     PolicyUnitOfWork,
+    ReadUoW,
     database_clock,
     revalidate_session,
 )
@@ -53,11 +59,21 @@ class Neutral:
 
 
 @dataclass(frozen=True, slots=True)
+class StaleGeneration:
+    """Carry no discarded model output or prepared context into the next attempt."""
+
+
+type Completion = MessageResponse | ChatConflict | StaleGeneration
+
+
+@dataclass(frozen=True, slots=True)
 class ChatService:
     """Bind one HTTP request's CSRF proof to each fresh session transaction."""
 
     policy: PolicyUnitOfWork
     csrf_token: str = field(repr=False)
+    generation_timeout_seconds: int = GENERATION_TIMEOUT_SECONDS
+    pending_lease_seconds: int = PENDING_LEASE_SECONDS
 
     async def generate_turn(
         self,
@@ -69,25 +85,46 @@ class ChatService:
         async with self.policy.protected_read(session_token) as uow:
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
-            reserved = await reserve(uow, thread_id, request, session_token=session_token)
+            reserved = await reserve(
+                uow,
+                thread_id,
+                request,
+                session_token=session_token,
+                lease_seconds=self.pending_lease_seconds,
+            )
         match reserved:
             case MessageResponse() | ChatConflict():
                 return reserved
             case Reservation():
-                outcome = await self._generate(session_token, reserved, request.user_input)
-                expected: Reservation = reserved
-                if isinstance(outcome, Generated):
-                    expected = GenerationAttempt(
-                        reserved.principal_id,
-                        reserved.session_id,
-                        reserved.thread_id,
-                        reserved.request_id,
-                        reserved.thread_revision,
-                        outcome.attempt.prepared,
-                    )
-                return await self._complete(session_token, outcome, expected_attempt=expected)
+                for _ in range(GENERATION_MAX_ATTEMPTS):
+                    completed = await self._attempt(session_token, reserved, request.user_input)
+                    if not isinstance(completed, StaleGeneration):
+                        return completed
+                final = await self._complete(
+                    session_token, Neutral(reserved, "policy_changed"), expected_attempt=reserved
+                )
+                if isinstance(final, StaleGeneration):
+                    message = "Neutral completion cannot request generation"
+                    raise TypeError(message)
+                return final
             case _:
                 assert_never(reserved)
+
+    async def _attempt(
+        self, session_token: str, reserved: Reservation, user_input: str
+    ) -> Completion:
+        outcome = await self._generate(session_token, reserved, user_input)
+        expected: Reservation = reserved
+        if isinstance(outcome, Generated):
+            expected = GenerationAttempt(
+                reserved.principal_id,
+                reserved.session_id,
+                reserved.thread_id,
+                reserved.request_id,
+                reserved.thread_revision,
+                outcome.attempt.prepared,
+            )
+        return await self._complete(session_token, outcome, expected_attempt=expected)
 
     async def _generate(
         self,
@@ -96,11 +133,10 @@ class ChatService:
         user_input: str,
     ) -> Generated | Neutral:
         try:
-            adapter = llm.get_llm_adapter()
             counter = llm.get_token_counter()
             if counter is None:
                 return Neutral(reservation, "generation_unavailable")
-            with anyio.fail_after(60):
+            with anyio.fail_after(self.generation_timeout_seconds):
                 vector = await embeddings.get_embedding_adapter().embed_query(user_input)
                 async with self.policy.protected_read(session_token) as uow:
                     _ = await get_owned_thread(uow, reservation.thread_id)
@@ -131,20 +167,62 @@ class ChatService:
                             reservation.thread_revision,
                             prepared,
                         )
-                        body = await adapter.generate(
-                            user_input=user_input, system_supplied_context=prepared.model_context
-                        )
-                        if (
-                            not body.strip()
-                            or "\x00" in body
-                            or len(body.encode("utf-8")) > MAX_ANSWER_BYTES
-                        ):
-                            return Neutral(reservation, "generation_unavailable")
-                        return Generated(attempt, body, counter)
+                        return await self._infer(session_token, attempt, user_input, counter)
                     case _:
                         assert_never(prepared)
         except (llm.LLMUnavailableError, EmbeddingError, SearchError, TimeoutError):
             return Neutral(reservation, "generation_unavailable")
+
+    async def _infer(
+        self,
+        session_token: str,
+        attempt: GenerationAttempt,
+        user_input: str,
+        counter: TokenCounter,
+    ) -> Generated | Neutral:
+        reservation = Reservation(
+            attempt.principal_id,
+            attempt.session_id,
+            attempt.thread_id,
+            attempt.request_id,
+            attempt.thread_revision,
+        )
+        if not await self._active(session_token, attempt):
+            return Neutral(reservation, "interrupted")
+        body = await llm.get_llm_adapter().generate(
+            user_input=user_input, system_supplied_context=attempt.prepared.model_context
+        )
+        if not body.strip() or "\x00" in body or len(body.encode("utf-8")) > MAX_ANSWER_BYTES:
+            return Neutral(reservation, "generation_unavailable")
+        return Generated(attempt, body, counter)
+
+    async def _active(self, session_token: str, reservation: Reservation) -> bool:
+        async with self.policy.protected_read(session_token) as uow:
+            if (
+                uow.principal.principal_id != reservation.principal_id
+                or uow.principal.session_id != reservation.session_id
+                or not matches_token(self.csrf_token, uow.csrf_digest)
+            ):
+                raise ForbiddenError
+            thread = await get_owned_thread(uow, reservation.thread_id, lock=True)
+            await revalidate_session(uow, session_token)
+            turn = next(
+                (
+                    t
+                    for t in await load_turns(uow, thread.id)
+                    if t.request_id == reservation.request_id
+                ),
+                None,
+            )
+            now = await database_clock(uow.connection)
+            return (
+                thread.revision == reservation.thread_revision
+                and turn is not None
+                and turn.expected_thread_revision == reservation.thread_revision
+                and turn.state == "pending"
+                and turn.lease_expires_at is not None
+                and now < turn.lease_expires_at
+            )
 
     async def _complete(
         self,
@@ -152,7 +230,7 @@ class ChatService:
         outcome: Generated | Neutral,
         *,
         expected_attempt: Reservation,
-    ) -> MessageResponse | ChatConflict:
+    ) -> Completion:
         attempt = outcome.attempt
         if attempt != expected_attempt:
             raise ForbiddenError
@@ -176,36 +254,42 @@ class ChatService:
             if thread.revision != attempt.thread_revision:
                 return ChatConflict("thread_conflict")
             now = await database_clock(uow.connection)
-            result: ReleasedAnswer | NeutralReason = "interrupted"
+            result: ReleasedAnswer | NeutralReason | StaleGeneration = "interrupted"
             if turn.lease_expires_at is not None and now < turn.lease_expires_at:
-                match outcome:
-                    case Generated(attempt=generated, body=body):
-                        canonical_history = await load_prior_turns(uow, generated.thread_id)
-                        release = await Guard(outcome.counter).authorize_release(
-                            generated.principal_id,
-                            generated.thread_id,
-                            generated.prepared,
-                            PostgresPolicyReader(uow),
-                        )
-                        result = (
-                            ReleasedAnswer(body, generated.prepared.source_refs)
-                            if release.allowed
-                            and matches_history(generated.prepared, canonical_history)
-                            else "policy_changed"
-                        )
-                    case Neutral(reason=reason):
-                        result = reason
-                    case _:
-                        assert_never(outcome)
+                result = await _release_result(uow, outcome)
             await revalidate_session(uow, session_token)
             if (
                 turn.lease_expires_at is None
                 or await database_clock(uow.connection) >= turn.lease_expires_at
             ):
                 result = "interrupted"
-            revision = await complete_turn(uow, turn, result)
-            completed = next(t for t in await load_turns(uow, thread.id) if t.id == turn.id)
-            response = MessageResponse(
-                thread_revision=revision, turn=await read_turn(uow, completed), replayed=False
-            )
-        return response  # noqa: RET504 -- the transaction must commit before returning.
+            response: Completion
+            if isinstance(result, StaleGeneration):
+                response = result
+            else:
+                revision = await complete_turn(uow, turn, result)
+                completed = next(t for t in await load_turns(uow, thread.id) if t.id == turn.id)
+                response = MessageResponse(
+                    thread_revision=revision, turn=await read_turn(uow, completed), replayed=False
+                )
+        return response
+
+
+async def _release_result(
+    uow: ReadUoW, outcome: Generated | Neutral
+) -> ReleasedAnswer | NeutralReason | StaleGeneration:
+    if isinstance(outcome, Neutral):
+        return outcome.reason
+    generated = outcome.attempt
+    canonical_history = await load_prior_turns(uow, generated.thread_id)
+    release = await Guard(outcome.counter).authorize_release(
+        generated.principal_id,
+        generated.thread_id,
+        generated.prepared,
+        PostgresPolicyReader(uow),
+    )
+    if not release.allowed and release.reason == "stale_revision":
+        return StaleGeneration()
+    if release.allowed and matches_history(generated.prepared, canonical_history):
+        return ReleasedAnswer(outcome.body, generated.prepared.source_refs)
+    return "policy_changed"

@@ -64,6 +64,7 @@ def test_logout_login_during_inference_does_not_adopt_old_attempt(chat_case: Cha
             chat_case.model.resume.set()
         response = running.result(10)
     assert response.status_code == 401
+    assert chat_case.model.call_count == 1
     assert "SYNTHETIC_ANSWER" not in response.text
     assert chat_case.client.get("/api/auth/me").status_code == 200
     assert chat_case.read().turns[0].state == "pending"
@@ -100,6 +101,7 @@ def test_commit_failure_never_returns_or_persists_answer(
         event.remove(Engine, "commit", fail_commit)
     assert reached == [True]
     assert response.status_code == 503
+    assert chat_case.model.call_count == 1
     assert "SYNTHETIC_ANSWER" not in response.text
     assert "PRIVATE_COMMIT_DETAIL" not in response.text
     assert "SYNTHETIC_ANSWER" not in caplog.text

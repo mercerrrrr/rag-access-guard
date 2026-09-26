@@ -69,6 +69,7 @@ def test_revoke_commits_during_unlocked_model_and_prevents_release(
         )
         assert connection.execute(text("SELECT count(*) FROM turn_sources")).scalar_one() == 0
     assert "SYNTHETIC_ANSWER" not in caplog.text
+    assert chat_case.model.call_count == 1
 
 
 @pytest.mark.parametrize("mode", ["logout", "absolute", "idle", "inactive"])
@@ -106,6 +107,7 @@ def test_invalid_session_during_model_never_stores_output(chat_case: ChatCase, m
             chat_case.model.resume.set()
         response = running.result(10)
     assert response.status_code == 401
+    assert chat_case.model.call_count == 1
     assert "SYNTHETIC_ANSWER" not in response.text
     with chat_case.database.connect() as connection:
         assert connection.execute(text("SELECT answer FROM chat_turns")).scalar_one() is None
@@ -117,6 +119,7 @@ def test_model_failure_becomes_server_neutral(chat_case: ChatCase) -> None:
     assert result.turn.state == "neutral"
     assert result.thread_revision == 1
     assert result.turn.sources == ()
+    assert chat_case.model.call_count == 1
 
 
 def test_policy_failure_after_generation_discards_output(
@@ -140,6 +143,7 @@ def test_policy_failure_after_generation_discards_output(
     result = chat_case.send(question())
     assert result.turn.state == "neutral"
     assert "PRIVATE_POLICY_FAILURE" not in result.model_dump_json()
+    assert chat_case.model.call_count == 1
     with chat_case.database.connect() as connection:
         assert connection.execute(text("SELECT answer FROM chat_turns")).scalar_one() is None
 
@@ -163,6 +167,7 @@ def test_completion_transaction_failure_rolls_back_answer(
         headers=ChatHttp.csrf(chat_case.client),
     )
     assert response.status_code == 503
+    assert chat_case.model.call_count == 1
     assert "SYNTHETIC_ANSWER" not in response.text
     with chat_case.database.connect() as connection:
         assert connection.execute(text("SELECT answer FROM chat_turns")).scalar_one() is None

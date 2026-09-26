@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import insert, select, update
 
 from rag_access_guard import SourceRef
+from rag_access_guard_api.config import PENDING_LEASE_SECONDS
 from rag_access_guard_api.persistence import ChatThread, ChatTurn, TurnSource
 from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.services.audit import AuditRecord, write_audit
@@ -48,7 +49,13 @@ async def load_turns(uow: ReadUoW, thread_id: UUID) -> tuple[StoredTurn, ...]:
     return tuple(StoredTurn.model_validate(row) for row in rows)
 
 
-async def insert_pending(uow: ReadUoW, thread_id: UUID, request: MessageRequest) -> None:
+async def insert_pending(
+    uow: ReadUoW,
+    thread_id: UUID,
+    request: MessageRequest,
+    *,
+    lease_seconds: int = PENDING_LEASE_SECONDS,
+) -> None:
     """Reserve one request under its thread lock with a server-time crash lease."""
     now = await database_clock(uow.connection)
     _ = await uow.connection.execute(
@@ -59,7 +66,7 @@ async def insert_pending(uow: ReadUoW, thread_id: UUID, request: MessageRequest)
             request_sha256=request_hash(request),
             expected_thread_revision=request.expected_thread_revision,
             user_input=request.user_input,
-            lease_expires_at=now + timedelta(seconds=180),
+            lease_expires_at=now + timedelta(seconds=lease_seconds),
         )
     )
     if request.expected_thread_revision == 0:

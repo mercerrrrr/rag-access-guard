@@ -10,9 +10,9 @@ from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.persistence import User
 from rag_access_guard_api.routes import chat as routes
-from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
+from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.services import chat
-from rag_access_guard_api.services.chat_state import ChatConflict, Reservation
+from rag_access_guard_api.services.chat_state import Reservation
 from rag_access_guard_api.services.retrieval import retrieve
 from tests.integration.test_chat_history_boundaries import add_document
 from tests.support.chat import ChatHttp, seed_thread
@@ -87,7 +87,7 @@ def test_completion_rejects_rebound_valid_prepared_context(
             outcome: chat.Generated | chat.Neutral,
             *,
             expected_attempt: Reservation,
-        ) -> MessageResponse | ChatConflict:
+        ) -> chat.Completion:
             return await super()._complete(
                 session_token,
                 await tampered(self, session_token, outcome),
