@@ -5,7 +5,7 @@ from typing import Final
 import pytest
 
 _TEST_LIMIT_SECRET: Final = secrets.token_hex(32)
-pytest_plugins = ("tests.support.chat_generation",)
+pytest_plugins = ("tests.support.chat_generation", "tests.support.security_races")
 
 
 def pytest_configure() -> None:
