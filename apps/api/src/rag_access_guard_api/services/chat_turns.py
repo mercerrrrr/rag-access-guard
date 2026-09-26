@@ -13,6 +13,7 @@ from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.services.audit import AuditRecord, write_audit
 from rag_access_guard_api.services.chat_state import NeutralReason, StoredTurn, request_hash
 from rag_access_guard_api.services.security import ReadUoW, database_clock
+from rag_access_guard_api.services.source_closure import closure_digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,7 @@ async def load_turns(uow: ReadUoW, thread_id: UUID) -> tuple[StoredTurn, ...]:
                 ChatTurn.user_input,
                 ChatTurn.state,
                 ChatTurn.provenance_complete,
+                ChatTurn.source_closure_sha256,
                 ChatTurn.neutral_reason,
                 ChatTurn.lease_expires_at,
             )
@@ -96,6 +98,7 @@ async def complete_turn(
                     state="available",
                     answer=body,
                     provenance_complete=True,
+                    source_closure_sha256=closure_digest(refs),
                     completed_at=now,
                     ordinal=revision,
                     lease_expires_at=None,

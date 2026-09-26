@@ -12,6 +12,7 @@ def test_source_order_migration_preserves_legacy_rows_and_rolls_back_safely(
     auth_database: Engine,
 ) -> None:
     config = Config("apps/api/alembic.ini")
+    command.check(config)
     command.downgrade(config, "0009_chat_threads")
     with auth_database.begin() as connection:
         turn = seed_pending(connection, seed_thread(connection))
@@ -26,14 +27,13 @@ def test_source_order_migration_preserves_legacy_rows_and_rolls_back_safely(
             {"turn": turn},
         )
         before = connection.execute(text("SELECT * FROM turn_sources")).one()
-    command.upgrade(config, "head")
-    command.check(config)
+    command.upgrade(config, "0010_source_order")
     with auth_database.connect() as connection:
         after = connection.execute(text("SELECT * FROM turn_sources")).one()
         assert tuple(after[:-1]) == tuple(before)
         assert after[-1] is None
     command.downgrade(config, "0009_chat_threads")
-    command.upgrade(config, "head")
+    command.upgrade(config, "0010_source_order")
     with auth_database.begin() as connection:
         _ = connection.execute(text("UPDATE turn_sources SET position=0"))
     with pytest.raises(DBAPIError, match="Source downgrade requires unpositioned sources"):
@@ -43,3 +43,5 @@ def test_source_order_migration_preserves_legacy_rows_and_rolls_back_safely(
         assert connection.execute(text("SELECT answer FROM chat_turns")).scalar_one() == "Legacy"
     with pytest.raises(IntegrityError), auth_database.begin() as connection:
         _ = connection.execute(text("UPDATE turn_sources SET position=-1"))
+    command.upgrade(config, "head")
+    command.check(config)

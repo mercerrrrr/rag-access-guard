@@ -57,6 +57,9 @@ class ChatTurn:
             postgresql_where=text("state = 'pending'"),
         ),
         CheckConstraint("octet_length(request_sha256) = 32", name="ck_chat_turns_request_hash"),
+        CheckConstraint(
+            "octet_length(source_closure_sha256) = 32", name="ck_chat_turns_source_closure"
+        ),
         CheckConstraint("expected_thread_revision >= 0", name="ck_chat_turns_revision"),
         CheckConstraint(
             """(
@@ -83,6 +86,9 @@ class ChatTurn:
     state: Mapped[str] = mapped_column(Text, default="pending", server_default="pending")
     ordinal: Mapped[int | None] = mapped_column(BigInteger, default=None)
     answer: Mapped[str | None] = mapped_column(Text, default=None, repr=False)
+    source_closure_sha256: Mapped[bytes | None] = mapped_column(
+        LargeBinary, default=None, repr=False
+    )
     provenance_complete: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )

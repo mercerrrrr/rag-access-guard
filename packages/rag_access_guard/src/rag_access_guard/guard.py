@@ -1,43 +1,25 @@
 """Access decisions over host-provided policy snapshots."""
 
-import re
 from dataclasses import dataclass, replace
 from hashlib import sha256
+from typing import assert_never
 from uuid import UUID
 
+from rag_access_guard._policy import valid_provenance
 from rag_access_guard._validation import require_nonnegative
-from rag_access_guard.context import matches_canonical, render
+from rag_access_guard.context import context_refs, matches_canonical, render
 from rag_access_guard.fingerprint import fingerprint
+from rag_access_guard.history import filter_history
 from rag_access_guard.ports import PolicyReader, TokenCounter
 from rag_access_guard.types import (
     AccessDecision,
     CandidateChunk,
-    PolicySnapshot,
     PreparedContext,
     PrepareDenied,
     PriorTurn,
     ReleaseDecision,
     SourceRef,
 )
-
-
-def _valid_provenance(snapshot: PolicySnapshot, requested: tuple[SourceRef, ...]) -> bool:
-    allowed = set(snapshot.allowed_refs)
-    denied = set(snapshot.denied_refs)
-    if (
-        not snapshot.provenance_valid
-        or len(allowed) != len(snapshot.allowed_refs)
-        or len(denied) != len(snapshot.denied_refs)
-        or allowed & denied
-        or allowed | denied != set(requested)
-    ):
-        return False
-    hashes = snapshot.canonical_chunk_hashes
-    return (
-        len(hashes) == len(allowed)
-        and {ref for ref, _ in hashes} == allowed
-        and all(re.fullmatch(r"[0-9a-f]{64}", digest) for _, digest in hashes)
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,9 +42,7 @@ class Guard:
         prior_turns: tuple[PriorTurn, ...],
         policy_reader: PolicyReader,
     ) -> PreparedContext | PrepareDenied:
-        """Prepare single-turn context from canonical allowed chunks within the budget."""
-        if prior_turns:
-            return PrepareDenied(reason="invalid_provenance", policy_revision=None)
+        """Prepare allowed chunks and whole historical pairs within one policy revision."""
         refs = tuple(dict.fromkeys(c.source_ref for c in candidate_chunks))
         try:
             snapshot = await policy_reader.snapshot(principal_id, refs)
@@ -70,7 +50,7 @@ class Guard:
             return PrepareDenied(reason="policy_unavailable", policy_revision=None)
         if snapshot.principal_id != principal_id or not snapshot.principal_active:
             return PrepareDenied(reason="denied", policy_revision=snapshot.revision)
-        if not _valid_provenance(snapshot, refs):
+        if not valid_provenance(snapshot, refs):
             return PrepareDenied(reason="invalid_provenance", policy_revision=snapshot.revision)
         hashes = dict(snapshot.canonical_chunk_hashes)
         chosen: dict[SourceRef, CandidateChunk] = {}
@@ -83,11 +63,24 @@ class Guard:
                 return PrepareDenied(reason="invalid_provenance", policy_revision=snapshot.revision)
             _ = chosen.setdefault(chunk.source_ref, chunk)
         chunks = tuple(chosen.values())
-        while chunks and self.token_counter.count(render(chunks)) > self.max_context_tokens:
-            chunks = chunks[:-1]
+        filtered = await filter_history(
+            principal_id,
+            prior_turns,
+            policy_reader,
+            expected_revision=snapshot.revision,
+            max_prior_turns=self.max_prior_turns,
+        )
+        match filtered:
+            case PrepareDenied():
+                return filtered
+            case tuple():
+                history = filtered
+            case _:
+                assert_never(filtered)
+        chunks, history = self._bounded(chunks, history)
         prepared = PreparedContext(
-            model_context=render(chunks) if chunks else "",
-            source_refs=tuple(c.source_ref for c in chunks),
+            model_context=render(chunks, history) if chunks or history else "",
+            source_refs=context_refs(chunks, history),
             policy_revision=snapshot.revision,
             fingerprint="0" * 64,
         )
@@ -95,6 +88,23 @@ class Guard:
             prepared,
             fingerprint=fingerprint(prepared, self.token_counter.identity, self.max_context_tokens),
         )
+
+    def _bounded(
+        self, chunks: tuple[CandidateChunk, ...], history: tuple[PriorTurn, ...]
+    ) -> tuple[tuple[CandidateChunk, ...], tuple[PriorTurn, ...]]:
+        kept_history = history
+        kept_chunks = chunks
+        while (
+            kept_history
+            and self.token_counter.count(render(kept_chunks, kept_history))
+            > self.max_context_tokens
+        ):
+            kept_history = kept_history[1:]
+        while (
+            kept_chunks and self.token_counter.count(render(kept_chunks)) > self.max_context_tokens
+        ):
+            kept_chunks = kept_chunks[:-1]
+        return kept_chunks, kept_history
 
     async def authorize_release(
         self,
@@ -121,7 +131,7 @@ class Guard:
             reason = "denied"
         elif snapshot.revision != prepared.policy_revision:
             reason = "stale_revision"
-        elif not _valid_provenance(snapshot, prepared.source_refs):
+        elif not valid_provenance(snapshot, prepared.source_refs):
             reason = "invalid_provenance"
         elif snapshot.denied_refs:
             reason = "denied"
@@ -149,7 +159,7 @@ class Guard:
             return AccessDecision(allowed=False, reason="policy_unavailable", policy_revision=None)
         if snapshot.principal_id != principal_id or not snapshot.principal_active:
             return AccessDecision(allowed=False, reason="denied", policy_revision=snapshot.revision)
-        if not _valid_provenance(snapshot, requested):
+        if not valid_provenance(snapshot, requested):
             return AccessDecision(
                 allowed=False, reason="invalid_provenance", policy_revision=snapshot.revision
             )

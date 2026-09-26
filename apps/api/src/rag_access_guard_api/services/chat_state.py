@@ -37,6 +37,7 @@ class StoredTurn(BaseModel):
     user_input: str
     state: Literal["pending", "available", "neutral"]
     provenance_complete: bool
+    source_closure_sha256: bytes | None
     neutral_reason: NeutralReason | None
     lease_expires_at: datetime | None
 

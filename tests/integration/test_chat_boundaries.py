@@ -144,7 +144,7 @@ def test_pasted_closed_text_remains_user_input_not_system_provenance(chat_case: 
         assert connection.execute(text("SELECT count(*) FROM turn_sources")).scalar_one() == 1
 
 
-def test_title_uses_only_first_user_input_and_model_has_no_hidden_history(
+def test_title_uses_first_user_input_and_history_is_explicitly_verified(
     chat_case: ChatCase,
 ) -> None:
     first = MessageRequest(
@@ -155,7 +155,9 @@ def test_title_uses_only_first_user_input_and_model_has_no_hidden_history(
         MessageRequest(request_id=uuid4(), expected_thread_revision=1, user_input="SECOND QUESTION")
     )
     assert chat_case.read().title == "FIRST QUESTION"
+    assert "FIRST" not in chat_case.model.inputs[0][1]
     user, context = chat_case.model.inputs[1]
     assert user == "SECOND QUESTION"
-    assert "FIRST" not in context
-    assert "SYNTHETIC_ANSWER" not in context
+    assert '"user_input":"  FIRST   QUESTION  "' in context
+    assert '"answer":"SYNTHETIC_ANSWER"' in context
+    assert "SECOND QUESTION" not in context

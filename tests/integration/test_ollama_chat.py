@@ -152,7 +152,7 @@ def test_real_question_budget_rejects_before_reservation(
     assert ollama_wire.requests == []
 
 
-def test_second_turn_does_not_automatically_resend_first_answer(
+def test_second_turn_receives_only_explicit_verified_history(
     chat_case: ChatCase, ollama_wire: Wire
 ) -> None:
     _ = chat_case.send(question())
@@ -161,6 +161,8 @@ def test_second_turn_does_not_automatically_resend_first_answer(
     )
     assert result.turn.state == "available"
     second = TypeAdapter[JsonValue](JsonValue).dump_json(ollama_wire.requests[1]).decode()
-    assert "LOCAL_FINAL_ANSWER" not in second
-    assert "QUESTION" not in second
+    assert "LOCAL_FINAL_ANSWER" in second
+    assert "QUESTION" in second
+    assert "PRIVATE_REASONING" not in second
+    assert '"context":' not in second
     assert "PROTECTED_SYNTHETIC" in second

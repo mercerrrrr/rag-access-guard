@@ -1,4 +1,4 @@
-"""Single-turn generation with no database locks across model inference."""
+"""Provenance-aware generation with no database locks across model inference."""
 
 from dataclasses import dataclass, field
 from typing import Final, assert_never
@@ -7,13 +7,14 @@ from uuid import UUID
 import anyio
 
 from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
+from rag_access_guard.context import matches_history
 from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
 from rag_access_guard_api.services.chat_read import read_turn
-from rag_access_guard_api.services.chat_repository import get_owned_thread
+from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
 from rag_access_guard_api.services.chat_reservation import reserve
 from rag_access_guard_api.services.chat_state import (
     ChatConflict,
@@ -96,18 +97,22 @@ class ChatService:
                     if uow.principal.session_id != reservation.session_id:
                         raise ForbiddenError
                     chunks = await retrieve(uow, vector)
+                    history = await load_prior_turns(uow, reservation.thread_id)
                     prepared = await Guard(counter).prepare_context(
                         reservation.principal_id,
                         chunks,
-                        (),
+                        history,
                         PostgresPolicyReader(uow),
                     )
                 match prepared:
                     case PrepareDenied():
                         return Neutral(reservation, "policy_changed")
                     case PreparedContext():
-                        if not prepared.source_refs:
-                            return Neutral(reservation, "no_context")
+                        if not prepared.source_refs or not matches_history(prepared, history):
+                            return Neutral(
+                                reservation,
+                                "policy_changed" if prepared.source_refs else "no_context",
+                            )
                         attempt = GenerationAttempt(
                             reservation.principal_id,
                             reservation.session_id,
@@ -159,6 +164,7 @@ class ChatService:
             if turn.lease_expires_at is not None and now < turn.lease_expires_at:
                 match outcome:
                     case Generated(attempt=generated, body=body):
+                        canonical_history = await load_prior_turns(uow, generated.thread_id)
                         release = await Guard(outcome.counter).authorize_release(
                             generated.principal_id,
                             generated.thread_id,
@@ -168,6 +174,7 @@ class ChatService:
                         result = (
                             ReleasedAnswer(body, generated.prepared.source_refs)
                             if release.allowed
+                            and matches_history(generated.prepared, canonical_history)
                             else "policy_changed"
                         )
                     case Neutral(reason=reason):

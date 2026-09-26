@@ -17,6 +17,7 @@ from rag_access_guard_api.schemas.chat import (
 )
 from rag_access_guard_api.services.chat_state import StoredTurn, neutral_view
 from rag_access_guard_api.services.security import ReadUoW, database_clock
+from rag_access_guard_api.services.source_closure import closure_matches
 from rag_access_guard_api.services.sources import build_source_url
 
 
@@ -57,6 +58,8 @@ async def _read_answer(uow: ReadUoW, turn: StoredTurn) -> TurnView:
         )
     ).tuples()
     refs = tuple(SourceRef(document_id=d, document_version_id=v, chunk_id=c) for d, v, c in rows)
+    if not closure_matches(refs, turn.source_closure_sha256):
+        return hidden
     decision = await Guard(FakeTokenCounter()).authorize_read(
         uow.principal.principal_id,
         refs,
