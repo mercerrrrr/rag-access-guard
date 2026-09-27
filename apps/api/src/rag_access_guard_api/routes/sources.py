@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.exc import SQLAlchemyError
 
 from rag_access_guard import SourceRef
@@ -11,7 +11,7 @@ from rag_access_guard_api.routes.auth import AuthCookies, check_origin
 from rag_access_guard_api.schemas.sources import SourceContent, SourceNotFound
 from rag_access_guard_api.services.errors import UnauthenticatedError
 from rag_access_guard_api.services.security import PolicyUnitOfWork, revalidate_session
-from rag_access_guard_api.services.sources import read_source
+from rag_access_guard_api.services.sources import read_original, read_source
 
 
 def build_sources_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter:
@@ -34,5 +34,27 @@ def build_sources_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRou
             raise HTTPException(status_code=404, detail="Not found") from None
         else:
             return result
+
+    @router.get("/api/documents/{document_id}/versions/{version_id}/original")
+    async def original(
+        request: Request, document_id: UUID, version_id: UUID, chunk_id: UUID
+    ) -> Response:
+        check_origin(request, settings)
+        token = cookies.credentials(request).session
+        ref = SourceRef(document_id=document_id, document_version_id=version_id, chunk_id=chunk_id)
+        try:
+            async with policy.protected_read(token) as uow:
+                result = await read_original(uow, ref)
+                await revalidate_session(uow, token)
+        except (UnauthenticatedError, SourceNotFound, SQLAlchemyError):
+            raise HTTPException(status_code=404, detail="Not found") from None
+        return Response(
+            content=result.data,
+            media_type=result.media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{result.filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     return router

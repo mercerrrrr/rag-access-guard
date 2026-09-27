@@ -1,5 +1,6 @@
 """Content of one currently authorized canonical source."""
 
+from dataclasses import dataclass, field
 from typing import ClassVar
 from uuid import UUID
 
@@ -19,3 +20,12 @@ class SourceContent(BaseModel):
 
 class SourceNotFound(Exception):  # noqa: N818 -- public phase contract.
     """A source cannot be disclosed to the current principal."""
+
+
+@dataclass(frozen=True, slots=True)
+class OriginalContent:
+    """Bounded immutable bytes, never a storage URL or client filename."""
+
+    data: bytes = field(repr=False)
+    media_type: str
+    filename: str

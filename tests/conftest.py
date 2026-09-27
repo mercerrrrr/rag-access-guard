@@ -9,6 +9,7 @@ pytest_plugins = (
     "tests.support.chat_generation",
     "tests.support.security_races",
     "tests.support.stored_chat",
+    "tests.support.downloads",
 )
 
 

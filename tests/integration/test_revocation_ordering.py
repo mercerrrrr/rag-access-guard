@@ -51,7 +51,7 @@ def test_release_waiting_for_revoke_cannot_read_prelock_grants(race_case: RaceHa
         )
 
 
-@pytest.mark.parametrize("surface", ["release", "history", "source"])
+@pytest.mark.parametrize("surface", ["release", "history", "source", "original"])
 def test_each_protected_transaction_locks_policy_before_reading_authority(
     race_case: RaceHarness, surface: str
 ) -> None:
@@ -72,6 +72,8 @@ def test_each_protected_transaction_locks_policy_before_reading_authority(
                 if surface == "history"
                 else saved.turn.sources[0].url
             )
+            if surface == "original":
+                path = path.replace("/content?", "/original?")
             assert case.client.get(path).status_code == 200
     assert transactions
     for statements in transactions:
@@ -111,7 +113,7 @@ def test_release_finishes_before_waiting_revoke(race_case: RaceHarness) -> None:
     assert set(race_case.isolation) == {"read committed"}
 
 
-@pytest.mark.parametrize("surface", ["history", "source"])
+@pytest.mark.parametrize("surface", ["history", "source", "original"])
 @pytest.mark.parametrize("first", ["mutation", "gate"])
 def test_protected_reads_follow_real_policy_lock_order(
     race_case: RaceHarness, surface: str, first: str
@@ -124,6 +126,8 @@ def test_protected_reads_follow_real_policy_lock_order(
     path = (
         f"/api/chat/threads/{case.thread}" if surface == "history" else answer.turn.sources[0].url
     )
+    if surface == "original":
+        path = path.replace("/content?", "/original?")
     marker = case.model.body if surface == "history" else "PROTECTED_SYNTHETIC"
     with ThreadPoolExecutor(max_workers=2) as pool:
         try:
@@ -149,15 +153,15 @@ def test_protected_reads_follow_real_policy_lock_order(
     assert len(race_case.waits) == 1
     assert response.headers["cache-control"] == "private, no-store"
     assert (marker in response.text) is (first == "gate")
-    assert response.status_code == (404 if first == "mutation" and surface == "source" else 200)
+    assert response.status_code == (404 if first == "mutation" and surface != "history" else 200)
     denied = case.client.get(path)
     assert marker not in denied.text
     assert case.document.title not in denied.text
-    assert denied.status_code == (404 if surface == "source" else 200)
+    assert denied.status_code == (200 if surface == "history" else 404)
     assert set(race_case.isolation) == {"read committed"}
 
 
-@pytest.mark.parametrize("surface", ["release", "history", "source"])
+@pytest.mark.parametrize("surface", ["release", "history", "source", "original"])
 def test_session_expiry_is_rechecked_after_observed_policy_wait(
     race_case: RaceHarness, monkeypatch: pytest.MonkeyPatch, surface: str
 ) -> None:
@@ -175,8 +179,10 @@ def test_session_expiry_is_rechecked_after_observed_policy_wait(
     if surface != "release":
         saved = case.send(question)
         assert saved.turn.state == "available"
-        if surface == "source":
+        if surface in {"source", "original"}:
             path = saved.turn.sources[0].url
+            if surface == "original":
+                path = path.replace("/content?", "/original?")
     releases_before = len(race_case.releases)
     case.model.hold = surface == "release"
 
@@ -213,7 +219,7 @@ def test_session_expiry_is_rechecked_after_observed_policy_wait(
             case.model.resume.set()
         assert mutation.result(10).status_code == 201
         response = pending.result(10)
-    assert response.status_code == (404 if surface == "source" else 401)
+    assert response.status_code == (404 if surface in {"source", "original"} else 401)
     assert case.model.body not in response.text
     assert "PROTECTED_SYNTHETIC" not in response.text
     assert len(race_case.releases) == releases_before
