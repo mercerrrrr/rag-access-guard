@@ -5,6 +5,10 @@ import {
   type RouterHistory,
 } from "vue-router";
 
+import { sessionApi } from "@/api/session";
+import { createSessionState, type SessionState } from "@/composables/useSession";
+import { safeReturnPath } from "@/routePaths";
+
 const sectionRoutes: RouteRecordRaw[] = [
   {
     path: "/chat",
@@ -38,6 +42,7 @@ const sectionRoutes: RouteRecordRaw[] = [
   {
     path: "/access",
     name: "access",
+    meta: { adminOnly: true },
     component: () => import("@/views/SectionView.vue"),
     props: {
       title: "Доступ",
@@ -50,6 +55,7 @@ const sectionRoutes: RouteRecordRaw[] = [
   {
     path: "/audit",
     name: "audit",
+    meta: { adminOnly: true },
     component: () => import("@/views/SectionView.vue"),
     props: {
       title: "Аудит",
@@ -72,6 +78,7 @@ const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
   : [];
 
 const routes: RouteRecordRaw[] = [
+  { path: "/login", name: "login", component: () => import("@/views/LoginView.vue") },
   { path: "/", redirect: "/chat" },
   ...sectionRoutes,
   ...developmentRoutes,
@@ -80,8 +87,26 @@ const routes: RouteRecordRaw[] = [
 
 export const createAppRouter = (
   history: RouterHistory = createWebHistory(import.meta.env.BASE_URL),
-) =>
-  createRouter({
+  session: SessionState = createSessionState(sessionApi),
+) => {
+  const router = createRouter({
     history,
     routes,
   });
+  router.beforeEach(async (to) => {
+    if (import.meta.env.DEV && to.name === "design-system") return;
+    if (session.status.value === "loading" || to.name !== "login") await session.refresh();
+    if (to.name === "login") {
+      if (session.status.value === "authenticated") return safeReturnPath(to.query["returnTo"]);
+      return;
+    }
+    if (session.status.value !== "authenticated") {
+      return { name: "login", query: { returnTo: safeReturnPath(to.path) } };
+    }
+    if (to.meta.adminOnly && !session.user.value?.is_admin) return "/chat";
+  });
+  router.afterEach((to) => {
+    document.title = `${to.name === "login" ? "Вход" : "Корпоративный поиск"} — RAG Access Guard`;
+  });
+  return router;
+};

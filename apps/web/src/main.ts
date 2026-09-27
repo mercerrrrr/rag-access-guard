@@ -7,9 +7,14 @@ import { createApp } from "vue";
 
 import App from "@/App.vue";
 import { createAppRouter } from "@/router";
+import { sessionApi } from "@/api/session";
+import { createSessionState } from "@/composables/useSession";
+import { sessionKey } from "@/composables/sessionContext";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
+import "@/styles/session.css";
 
 setTheme(webLightTheme);
 
-createApp(App).use(createAppRouter()).mount("#app");
+const session = createSessionState(sessionApi);
+createApp(App).provide(sessionKey, session).use(createAppRouter(undefined, session)).mount("#app");

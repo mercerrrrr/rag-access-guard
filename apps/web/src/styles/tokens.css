@@ -54,6 +54,8 @@
   --measure-compact: 30ch;
   --measure-content: 44rem;
   --measure-reading: 65ch;
+  --measure-session: 30rem;
+  --size-control: 2.75rem;
 
   --duration-micro: 120ms;
   --easing-standard: ease-out;

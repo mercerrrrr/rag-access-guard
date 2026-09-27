@@ -3,8 +3,10 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 
 import NavigationIcon from "@/components/NavigationIcon.vue";
+import { useSession } from "@/composables/sessionContext";
 
 const route = useRoute();
+const session = useSession();
 
 const navigationItems = [
   { label: "Чат", to: "/chat", icon: "chat" },
@@ -12,6 +14,8 @@ const navigationItems = [
   { label: "Доступ", to: "/access", icon: "access" },
   { label: "Аудит", to: "/audit", icon: "audit" },
 ] as const;
+const visibleItems = computed(() => navigationItems.filter((item) =>
+  session.user.value?.is_admin || item.to === "/chat" || item.to === "/documents"));
 
 const contextTitle = computed(() => route.meta.contextTitle);
 const contextMessage = computed(() => route.meta.contextMessage);
@@ -41,7 +45,7 @@ const contextMessage = computed(() => route.meta.contextMessage);
         aria-label="Основные разделы"
       >
         <RouterLink
-          v-for="item in navigationItems"
+          v-for="item in visibleItems"
           :key="item.to"
           class="navigation__link"
           active-class="navigation__link--active"
@@ -59,7 +63,24 @@ const contextMessage = computed(() => route.meta.contextMessage);
 
     <header class="utility-header">
       <span class="utility-header__title">Корпоративный поиск</span>
-      <span class="utility-header__meta">RAG Access Guard</span>
+      <div
+        v-if="session.user.value"
+        class="session-identity"
+      >
+        <span class="session-identity__name">{{ session.user.value.display_name }}</span>
+        <button
+          type="button"
+          class="session-button"
+          :disabled="session.busy.value"
+          @click="session.signOut"
+        >
+          Выйти
+        </button>
+      </div>
+      <span
+        v-else
+        class="utility-header__meta"
+      >RAG Access Guard</span>
     </header>
 
     <main
@@ -67,6 +88,24 @@ const contextMessage = computed(() => route.meta.contextMessage);
       class="app-main"
       tabindex="-1"
     >
+      <div
+        v-if="session.message.value"
+        class="session-feedback"
+      >
+        <p
+          class="session-error"
+          role="alert"
+        >
+          {{ session.message.value }}
+        </p>
+        <button
+          class="session-button"
+          type="button"
+          @click="session.refresh"
+        >
+          Обновить сессию
+        </button>
+      </div>
       <slot />
     </main>
 
