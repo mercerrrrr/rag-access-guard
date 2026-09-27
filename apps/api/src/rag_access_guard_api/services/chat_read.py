@@ -1,6 +1,7 @@
 """Reauthorize each stored answer before loading any protected response fields."""
 
 from typing import assert_never
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -12,17 +13,58 @@ from rag_access_guard_api.schemas.chat import (
     AvailableTurn,
     PendingTurn,
     SourceView,
+    ThreadDetail,
     TurnView,
     UnavailableTurn,
 )
+from rag_access_guard_api.services.chat_repository import get_owned_thread
 from rag_access_guard_api.services.chat_state import StoredTurn, neutral_view
-from rag_access_guard_api.services.security import ReadUoW, database_clock
+from rag_access_guard_api.services.chat_turns import load_turns
+from rag_access_guard_api.services.security import ReadUoW, database_clock, revalidate_session
 from rag_access_guard_api.services.source_closure import closure_matches
 from rag_access_guard_api.services.sources import build_source_url
 
 
+class ReadPolicyUnavailableError(Exception):
+    """Abort the protected projection without carrying adapter error details."""
+
+
+async def read_thread(uow: ReadUoW, thread_id: UUID, *, session_token: str) -> ThreadDetail:
+    """Project one owned snapshot; a policy outage hides every protected answer."""
+    thread = await get_owned_thread(uow, thread_id, lock=True)
+    await revalidate_session(uow, session_token)
+    turns = await load_turns(uow, thread_id)
+    try:
+        views = tuple([await _project_turn(uow, turn) for turn in turns])
+    except ReadPolicyUnavailableError:
+        views = tuple(
+            [
+                _hidden(turn) if turn.state == "available" else await _project_turn(uow, turn)
+                for turn in turns
+            ]
+        )
+    return ThreadDetail(
+        id=thread.id,
+        title=thread.title,
+        revision=thread.revision,
+        created_at=thread.created_at,
+        turns=views,
+    )
+
+
 async def read_turn(uow: ReadUoW, turn: StoredTurn) -> TurnView:
-    """Project a turn within a live owner-checked policy snapshot."""
+    """Use the same projection for a completed, owner-checked request replay."""
+    try:
+        return await _project_turn(uow, turn)
+    except ReadPolicyUnavailableError:
+        return _hidden(turn)
+
+
+def _hidden(turn: StoredTurn) -> UnavailableTurn:
+    return UnavailableTurn(id=turn.id, request_id=turn.request_id, user_input=turn.user_input)
+
+
+async def _project_turn(uow: ReadUoW, turn: StoredTurn) -> TurnView:
     match turn.state:
         case "pending":
             now = await database_clock(uow.connection)
@@ -38,7 +80,7 @@ async def read_turn(uow: ReadUoW, turn: StoredTurn) -> TurnView:
 
 
 async def _read_answer(uow: ReadUoW, turn: StoredTurn) -> TurnView:
-    hidden = UnavailableTurn(id=turn.id, request_id=turn.request_id, user_input=turn.user_input)
+    hidden = _hidden(turn)
     if not turn.provenance_complete:
         return hidden
     rows = (
@@ -65,6 +107,8 @@ async def _read_answer(uow: ReadUoW, turn: StoredTurn) -> TurnView:
         refs,
         PostgresPolicyReader(uow),
     )
+    if decision.reason == "policy_unavailable":
+        raise ReadPolicyUnavailableError
     if not decision.allowed:
         return hidden
     answer = (

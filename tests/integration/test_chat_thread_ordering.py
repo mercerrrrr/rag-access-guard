@@ -19,7 +19,7 @@ from rag_access_guard_api.routes import chat as routes
 from rag_access_guard_api.schemas.auth import CsrfResponse
 from rag_access_guard_api.schemas.chat import MessageRequest, ThreadDetail
 from rag_access_guard_api.server import create_event_loop
-from rag_access_guard_api.services import chat, security
+from rag_access_guard_api.services import chat, chat_read, security
 from rag_access_guard_api.services.chat_repository import get_owned_thread
 from rag_access_guard_api.services.chat_state import Reservation
 from tests.support.chat import ChatHttp
@@ -144,7 +144,7 @@ def test_thread_detail_is_consistent_with_concurrent_owner_session(
             assert await run_sync(release.wait, 10)
             return result
 
-        monkeypatch.setattr(routes, "get_owned_thread", paused)
+        monkeypatch.setattr(chat_read, "get_owned_thread", paused)
         payload = MessageRequest(
             request_id=uuid4(), expected_thread_revision=0, user_input="FIRST QUESTION"
         )

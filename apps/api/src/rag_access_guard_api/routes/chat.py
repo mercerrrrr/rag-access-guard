@@ -17,16 +17,14 @@ from rag_access_guard_api.schemas.chat import (
     ThreadView,
 )
 from rag_access_guard_api.services.chat import ChatService
-from rag_access_guard_api.services.chat_read import read_turn
+from rag_access_guard_api.services.chat_read import read_thread
 from rag_access_guard_api.services.chat_repository import (
     create_thread,
-    get_owned_thread,
     list_threads,
 )
 from rag_access_guard_api.services.chat_state import ChatConflict
-from rag_access_guard_api.services.chat_turns import load_turns
 from rag_access_guard_api.services.errors import ForbiddenError
-from rag_access_guard_api.services.security import PolicyUnitOfWork, revalidate_session
+from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.tokens import matches_token
 
 
@@ -65,17 +63,7 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
             raise HTTPException(422, "Invalid request")
         session_token = cookies.credentials(request).session
         async with policy.protected_read(session_token) as uow:
-            thread = await get_owned_thread(uow, thread_id, lock=True)
-            await revalidate_session(uow, session_token)
-            return ThreadDetail(
-                id=thread.id,
-                title=thread.title,
-                revision=thread.revision,
-                created_at=thread.created_at,
-                turns=tuple(
-                    [await read_turn(uow, turn) for turn in await load_turns(uow, thread_id)]
-                ),
-            )
+            return await read_thread(uow, thread_id, session_token=session_token)
 
     @router.post("/{thread_id}/messages")
     async def message(
