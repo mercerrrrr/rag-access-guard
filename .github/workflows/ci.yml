@@ -91,9 +91,13 @@ jobs:
 
       - name: Verify standalone guard installation
         run: |
-          uv venv "${RUNNER_TEMP}/guard-venv"
-          uv pip install --python "${RUNNER_TEMP}/guard-venv/bin/python" --no-deps dist/rag_access_guard-*.whl
-          "${RUNNER_TEMP}/guard-venv/bin/python" -I -c 'from importlib.util import find_spec; import rag_access_guard; assert all(find_spec(name) is None for name in ("fastapi", "sqlalchemy", "rag_access_guard_api", "torch", "transformers", "tokenizers", "pgvector"))'
+          set -euo pipefail
+          wheel_dir="$(mktemp -d "${RUNNER_TEMP}/guard-wheel-XXXXXX")"
+          uv build --package rag-access-guard --wheel --out-dir "${wheel_dir}"
+          wheels=("${wheel_dir}"/rag_access_guard-*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv run --frozen python scripts/verify_guard_wheel.py --wheel "${wheels[0]}"
+          PYTHONPATH="${GITHUB_WORKSPACE}/packages/rag_access_guard/src" uv run --frozen python scripts/verify_guard_wheel.py --wheel "${wheels[0]}"
 
       - name: Smoke-test API entry point
         run: |

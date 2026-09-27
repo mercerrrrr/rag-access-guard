@@ -69,5 +69,6 @@ docstring-code-line-length = "dynamic"
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests", "packages/rag_access_guard/tests"]
+pythonpath = ["."]
 addopts = ["-ra", "--strict-config", "--strict-markers"]
 filterwarnings = ["error"]
