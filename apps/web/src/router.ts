@@ -30,14 +30,7 @@ const sectionRoutes: RouteRecordRaw[] = [
   {
     path: "/documents",
     name: "documents",
-    component: () => import("@/views/SectionView.vue"),
-    props: {
-      title: "Документы",
-      description: "Управление версиями и индексируемыми материалами.",
-      heading: "Реестр документов ещё не подключён",
-      message:
-        "Загрузка, версии и состояние индексации будут добавлены на следующих этапах.",
-    },
+    component: () => import("@/views/DocumentsView.vue"),
   },
   {
     path: "/access",

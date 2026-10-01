@@ -5,7 +5,7 @@ import {
   createRouter,
   type RouteRecordRaw,
 } from "vue-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
 import AppShell from "@/components/AppShell.vue";
@@ -13,6 +13,7 @@ import { sessionKey } from "@/composables/sessionContext";
 import { createSessionState } from "@/composables/useSession";
 import { deferred, sessionApi, student } from "@/test/session";
 import { ApiError } from "@/api/errors";
+import DocumentUpload from "@/components/DocumentUpload.vue";
 
 const createSectionComponent = (title: string) =>
   defineComponent({
@@ -136,4 +137,41 @@ it("allows_logout_while_identity_restore_is_pending", async () => {
   expect(session.status.value).toBe("anonymous");
   expect(wrapper.text()).not.toContain(student.display_name);
   wrapper.unmount();
+});
+
+it("window_focus_preserves_upload_draft_but_tab_return_revalidates", async () => {
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const me = vi.fn().mockResolvedValue({ user: student });
+  const session = createSessionState(sessionApi({ me }));
+  await session.refresh();
+  const router = createRouter({ history: createMemoryHistory(), routes: [
+    ...routes.filter((route) => route.path !== "/documents"),
+    { path: "/documents", component: DocumentUpload, props: { busy: false } },
+  ] });
+  await router.push("/documents");
+  const wrapper = mount(App, { global: { plugins: [router], provide: { [sessionKey]: session } } });
+  try {
+    await wrapper.get('input[type="text"]').setValue("Учебный документ");
+    const input = wrapper.get('input[type="file"]');
+    const file = new File(["Учебные данные"], "rules.txt", { type: "text/plain" });
+    Object.defineProperty(input.element, "files", { value: { item: () => file } });
+    await input.trigger("change");
+    const pending = deferred<string>();
+    let uploadSignal: AbortSignal | undefined;
+    const request = session.runProtected((signal) => { uploadSignal = signal; return pending.promise; });
+    window.dispatchEvent(new Event("focus"));
+    await flushPromises();
+    expect(uploadSignal?.aborted).toBe(false);
+    pending.resolve("uploaded");
+    await expect(request).resolves.toBe("uploaded");
+    expect(wrapper.get<HTMLInputElement>('input[type="text"]').element.value).toBe("Учебный документ");
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.getComponent(DocumentUpload).emitted("upload")?.[0]).toEqual([{ title: "Учебный документ", file }]);
+    expect(me).toHaveBeenCalledTimes(1);
+    me.mockRejectedValueOnce(new ApiError(401));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(session.status.value).toBe("anonymous");
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false);
+  } finally { wrapper.unmount(); visibility.mockRestore(); }
 });

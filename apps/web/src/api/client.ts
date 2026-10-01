@@ -25,7 +25,8 @@ export async function requestJson<T>(path: string, options: JsonRequest<T>): Pro
     const response = await ky(url, {
       method, headers, credentials: "same-origin", cache: "no-store", redirect: "error",
       retry: 0, timeout: options.timeout ?? 15000, throwHttpErrors: false,
-      ...(options.body === undefined ? {} : { json: options.body }),
+      ...(options.body instanceof FormData ? { body: options.body }
+        : options.body === undefined ? {} : { json: options.body }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     if (!response.ok) {

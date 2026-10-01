@@ -26,11 +26,11 @@ function restorePage(event: PageTransitionEvent) {
   if (event.persisted && !preview.value) void session.refresh();
 }
 onMounted(() => {
-  window.addEventListener("focus", revalidate);
+  document.addEventListener("visibilitychange", revalidate);
   window.addEventListener("pageshow", restorePage);
 });
 onBeforeUnmount(() => {
-  window.removeEventListener("focus", revalidate);
+  document.removeEventListener("visibilitychange", revalidate);
   window.removeEventListener("pageshow", restorePage);
 });
 </script>
