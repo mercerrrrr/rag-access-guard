@@ -9,6 +9,18 @@ import { createSessionState } from "@/composables/useSession";
 import { createAppRouter } from "@/router";
 import { deferred, sessionApi, student } from "@/test/session";
 
+it("initial_session_restore_preserves_the_login_return_path", async () => {
+  const state = createSessionState(sessionApi({ me: () => Promise.reject(new ApiError(401)) }));
+  const history = createMemoryHistory();
+  history.replace("/login?returnTo=/chat/999d5c86-01c3-4142-ac7a-e9e75250a0d6");
+  const router = createAppRouter(history, state);
+  const wrapper = mount(App, { global: { plugins: [router], provide: { [sessionKey]: state } } });
+  await router.isReady();
+  await flushPromises();
+  expect(router.currentRoute.value.query["returnTo"]).toBe("/chat/999d5c86-01c3-4142-ac7a-e9e75250a0d6");
+  wrapper.unmount();
+});
+
 it("successful_login_returns_to_the_requested_known_route", async () => {
   let signedIn = false;
   const state = createSessionState(sessionApi({

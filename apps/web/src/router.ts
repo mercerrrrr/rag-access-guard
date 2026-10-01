@@ -13,19 +13,19 @@ const sectionRoutes: RouteRecordRaw[] = [
   {
     path: "/chat",
     name: "chat",
-    component: () => import("@/views/SectionView.vue"),
-    props: {
-      title: "Новый диалог",
-      description: "Рабочая область для вопросов к корпоративным документам.",
-      heading: "Диалог пока пуст",
-      message:
-        "Функции вопросов и ответов появятся после настройки защищённого доступа и поиска.",
-    },
+    component: () => import("@/views/ChatView.vue"),
     meta: {
+      chat: true,
       contextTitle: "Источники ответа",
       contextMessage:
         "Источники появятся после ответа с проверяемым происхождением.",
     },
+  },
+  {
+    path: "/chat/:threadId",
+    name: "chat-thread",
+    component: () => import("@/views/ChatView.vue"),
+    meta: { chat: true, contextTitle: "Источники ответа" },
   },
   {
     path: "/documents",

@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import App from "@/App.vue";
+import AppShell from "@/components/AppShell.vue";
 import { sessionKey } from "@/composables/sessionContext";
 import { createSessionState } from "@/composables/useSession";
 import { deferred, sessionApi, student } from "@/test/session";
@@ -26,6 +27,20 @@ const routes: RouteRecordRaw[] = [
   { path: "/access", component: createSectionComponent("Доступ") },
   { path: "/audit", component: createSectionComponent("Аудит") },
 ];
+
+it("marks_chat_section_when_reading_a_saved_thread", async () => {
+  const session = createSessionState(sessionApi());
+  await session.refresh();
+  const router = createRouter({ history: createMemoryHistory(), routes: [
+    ...routes,
+    { path: "/chat/:threadId", name: "chat-thread", component: createSectionComponent("Диалог"), meta: { chat: true } },
+  ] });
+  await router.push("/chat/999d5c86-01c3-4142-ac7a-e9e75250a0d6");
+  const wrapper = mount(AppShell, { global: { plugins: [router], provide: { [sessionKey]: session } } });
+  expect(wrapper.get('a[href="/chat"]').classes()).toContain("navigation__link--active");
+  expect(wrapper.get('a[href="/chat"]').attributes("aria-current")).toBe("location");
+  wrapper.unmount();
+});
 
 describe("application shell", () => {
   it("keeps the four sections visible and marks the current route", async () => {

@@ -8,6 +8,7 @@ export type JsonRequest<T> = {
   readonly body?: unknown;
   readonly signal?: AbortSignal;
   readonly csrfToken?: string;
+  readonly timeout?: 15000 | 150000;
 };
 
 export async function requestJson<T>(path: string, options: JsonRequest<T>): Promise<T> {
@@ -23,7 +24,7 @@ export async function requestJson<T>(path: string, options: JsonRequest<T>): Pro
   try {
     const response = await ky(url, {
       method, headers, credentials: "same-origin", cache: "no-store", redirect: "error",
-      retry: 0, timeout: 15000, throwHttpErrors: false,
+      retry: 0, timeout: options.timeout ?? 15000, throwHttpErrors: false,
       ...(options.body === undefined ? {} : { json: options.body }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });

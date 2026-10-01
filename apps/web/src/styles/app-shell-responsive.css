@@ -18,6 +18,22 @@
   }
 }
 
+@media (min-width: 48rem) and (max-width: 63.99rem) and (max-height: 35rem) {
+  .app-shell--with-context {
+    grid-template-rows: minmax(var(--size-header), auto) auto auto;
+    max-block-size: none;
+    overflow: visible;
+  }
+
+  .app-shell--with-context .app-main {
+    overflow: visible;
+  }
+
+  .context-rail {
+    max-block-size: none;
+  }
+}
+
 @media (max-width: 47.99rem) {
   .app-shell,
   .app-shell--with-context {

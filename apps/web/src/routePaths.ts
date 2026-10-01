@@ -1,4 +1,7 @@
+import { z } from "zod";
+
 export function safeReturnPath(value: unknown): string {
-  return typeof value === "string" && ["/chat", "/documents", "/access", "/audit"].includes(value)
-    ? value : "/chat";
+  if (typeof value !== "string") return "/chat";
+  if (["/chat", "/documents", "/access", "/audit"].includes(value)) return value;
+  return value.startsWith("/chat/") && z.uuid().safeParse(value.slice(6)).success ? value : "/chat";
 }

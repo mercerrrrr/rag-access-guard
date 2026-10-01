@@ -48,6 +48,8 @@ const contextMessage = computed(() => route.meta.contextMessage);
           v-for="item in visibleItems"
           :key="item.to"
           class="navigation__link"
+          :class="{ 'navigation__link--active': item.to === '/chat' && route.meta.chat }"
+          :aria-current="route.path === item.to ? 'page' : (item.to === '/chat' && route.meta.chat ? 'location' : undefined)"
           active-class="navigation__link--active"
           :to="item.to"
         >
@@ -120,9 +122,11 @@ const contextMessage = computed(() => route.meta.contextMessage);
         </h2>
       </div>
       <fluent-divider role="presentation" />
-      <p class="context-rail__empty">
-        {{ contextMessage }}
-      </p>
+      <slot name="context">
+        <p class="context-rail__empty">
+          {{ contextMessage }}
+        </p>
+      </slot>
     </aside>
   </div>
 </template>

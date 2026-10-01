@@ -8,6 +8,11 @@ import { sessionApi } from "@/test/session";
 import { ApiError } from "@/api/errors";
 
 describe("application routes", () => {
+  it("keeps_owned_thread_return_path_after_login", () => {
+    const path = "/chat/00000000-0000-4000-8000-000000000010";
+    expect(safeReturnPath(path)).toBe(path);
+    expect(safeReturnPath(`${path}?next=//foreign.example`)).toBe("/chat");
+  });
   it("redirects the root path and exposes each primary section", async () => {
     const router = createAppRouter(createMemoryHistory(), createSessionState(sessionApi()));
 

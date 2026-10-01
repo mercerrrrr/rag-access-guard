@@ -13,7 +13,7 @@ const route = useRoute();
 const preview = computed(() => import.meta.env.DEV && route.name === "design-system");
 
 watch(session.status, async (status) => {
-  if (status === "anonymous" && route.name !== "login" && !preview.value) {
+  if (status === "anonymous" && route.matched.length > 0 && route.name !== "login" && !preview.value) {
     await router.replace({ name: "login", query: { returnTo: safeReturnPath(route.path) } });
   }
 });
@@ -36,7 +36,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppShell v-if="session.status.value === 'authenticated' || preview">
+  <RouterView
+    v-if="session.status.value === 'authenticated' && route.meta.chat"
+    :key="session.sessionEpoch.value"
+  />
+  <AppShell v-else-if="session.status.value === 'authenticated' || preview">
     <RouterView :key="session.sessionEpoch.value" />
   </AppShell>
   <main
