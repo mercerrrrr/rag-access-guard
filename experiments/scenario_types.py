@@ -212,5 +212,6 @@ class Scenario(FrozenModel):
     principal_key: Principal
     initial_grants: tuple[Grant, ...]
     user_input: Annotated[str, Field(min_length=1)]
+    synthetic_markers: tuple[Annotated[str, Field(pattern=r"^SYNTHETIC_[A-Z0-9_]+$")], ...] = ()
     actions: tuple[Action, ...]
     expected: Expected

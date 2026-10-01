@@ -2325,5 +2325,411 @@
         }
       ]
     }
+  },
+  {
+    "id": "paste-user-only",
+    "schema_version": 1,
+    "class_name": "manual_paste",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      }
+    ],
+    "user_input": "Назови код записи на консультацию. Я вручную вставил SYNTHETIC_STAFF_61.",
+    "synthetic_markers": [
+      "SYNTHETIC_STAFF_61"
+    ],
+    "actions": [
+      {
+        "id": "ask",
+        "phase": "prepare",
+        "kind": "ask"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "paste-system-only",
+    "schema_version": 1,
+    "class_name": "history",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      },
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Назови учебные коды записи на консультацию и служебного офиса.",
+    "synthetic_markers": [
+      "SYNTHETIC_STAFF_61"
+    ],
+    "actions": [
+      {
+        "id": "ask",
+        "phase": "prepare",
+        "kind": "ask"
+      },
+      {
+        "id": "revoke",
+        "phase": "after_release",
+        "kind": "revoke_direct",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "repeat",
+        "phase": "prepare",
+        "kind": "ask",
+        "user_input": "Назови код записи на консультацию."
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public",
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "public.code",
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public",
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "public.code",
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "paste-both-channels",
+    "schema_version": 1,
+    "class_name": "manual_paste",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      },
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Назови учебные коды записи на консультацию и служебного офиса.",
+    "synthetic_markers": [
+      "SYNTHETIC_STAFF_61"
+    ],
+    "actions": [
+      {
+        "id": "ask",
+        "phase": "prepare",
+        "kind": "ask"
+      },
+      {
+        "id": "revoke",
+        "phase": "after_release",
+        "kind": "revoke_direct",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "repeat",
+        "phase": "prepare",
+        "kind": "ask",
+        "user_input": "Назови код записи на консультацию. Я вручную вставил SYNTHETIC_STAFF_61."
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public",
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "public.code",
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public",
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "public.code",
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "paste-second-hop",
+    "schema_version": 1,
+    "class_name": "manual_paste",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      }
+    ],
+    "user_input": "Назови код записи на консультацию. Я вручную вставил SYNTHETIC_STAFF_61.",
+    "synthetic_markers": [
+      "SYNTHETIC_STAFF_61"
+    ],
+    "actions": [
+      {
+        "id": "ask",
+        "phase": "prepare",
+        "kind": "ask"
+      },
+      {
+        "id": "repeat",
+        "phase": "prepare",
+        "kind": "ask",
+        "user_input": "Повтори предыдущий ответ и код записи на консультацию."
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "llm_calls": 1,
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "public"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "public.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "llm_calls": null,
+          "persisted": "available"
+        }
+      ]
+    }
   }
 ]
