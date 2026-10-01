@@ -25,6 +25,16 @@ class FixtureManifest(FrozenModel):
     fixtures: Annotated[tuple[Fixture, ...], Field(min_length=1)]
 
 
+def read_fixture(root: Path, fixture: Fixture) -> bytes:
+    """Bind the actual ingestion bytes to the original corpus declaration."""
+    content = (root / fixture.path).read_bytes()
+    _ = content.decode("utf-8")
+    if sha256(content).hexdigest() != fixture.sha256:
+        message = f"fixture hash mismatch: {fixture.key}"
+        raise ValueError(message)
+    return content
+
+
 def load_fixture_manifest(path: Path) -> FixtureManifest:
     """Read the corpus declaration before any experiment connects to a host."""
     manifest = FixtureManifest.model_validate_json(path.read_bytes())
@@ -33,11 +43,7 @@ def load_fixture_manifest(path: Path) -> FixtureManifest:
         message = "duplicate fixture key"
         raise ValueError(message)
     for fixture in manifest.fixtures:
-        content = (path.parent / fixture.path).read_bytes()
-        _ = content.decode("utf-8")
-        if sha256(content).hexdigest() != fixture.sha256:
-            message = f"fixture hash mismatch: {fixture.key}"
-            raise ValueError(message)
+        _ = read_fixture(path.parent, fixture)
         if len(set(fixture.fact_keys)) != len(fixture.fact_keys) or any(
             not fact.startswith(f"{fixture.key}.") for fact in fixture.fact_keys
         ):

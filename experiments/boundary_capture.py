@@ -1,9 +1,9 @@
 """Bind an observed model request to the experiment's canonical source evidence."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from experiments.input_boundary import ModelRequestObservation
-from rag_access_guard import PolicySnapshot, PreparedContext, PriorTurn
+from rag_access_guard import PolicySnapshot, PreparedContext, PriorTurn, SourceRef
 from rag_access_guard.context import matches_canonical, matches_history
 
 
@@ -13,6 +13,7 @@ class CanonicalEvidence:
 
     snapshot: PolicySnapshot
     history: tuple[PriorTurn, ...]
+    canonical_chunk_hashes: tuple[tuple[SourceRef, str], ...] | None = None
 
 
 def _canonical_binding(prepared: PreparedContext, evidence: CanonicalEvidence) -> bool:
@@ -26,7 +27,12 @@ def _canonical_binding(prepared: PreparedContext, evidence: CanonicalEvidence) -
         return False
     if not prepared.source_refs:
         return prepared.model_context == ""
-    return matches_canonical(prepared, snapshot) and matches_history(prepared, evidence.history)
+    canonical = (
+        snapshot
+        if evidence.canonical_chunk_hashes is None
+        else replace(snapshot, canonical_chunk_hashes=evidence.canonical_chunk_hashes)
+    )
+    return matches_canonical(prepared, canonical) and matches_history(prepared, evidence.history)
 
 
 def capture_request(
