@@ -1,0 +1,30 @@
+.audit-workspace { display: grid; gap: var(--space-5); padding: var(--space-5); min-inline-size: 0; overflow-wrap: anywhere; }
+.audit-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.audit-filter-help { grid-column: 1 / -1; margin: 0; font-size: var(--font-size-label); }
+.audit-filters select { inline-size: 100%; min-inline-size: 0; min-block-size: var(--size-control); padding: var(--space-2); border: var(--border-size-thin) solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface-primary); color: var(--color-text-primary); }
+.audit-filters select:focus-visible { outline: var(--size-focus-ring) solid var(--color-accent); outline-offset: var(--size-focus-ring); }
+.audit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.audit-actions p { margin: 0; color: var(--color-text-secondary); }
+.audit-workspace > button { justify-self: start; }
+.audit-table { inline-size: 100%; table-layout: fixed; border-collapse: collapse; }
+.audit-table caption { text-align: start; padding-block-end: var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.audit-table :is(th, td) { text-align: start; vertical-align: top; padding: var(--space-3); border-block-end: var(--border-size-thin) solid var(--color-border); }
+.audit-table th { font-weight: var(--font-weight-medium); color: var(--color-text-secondary); font-size: var(--font-size-label); }
+.audit-table strong { font-weight: var(--font-weight-semibold); }
+.audit-table p { margin: var(--space-2) 0 0; }
+.audit-table time, .audit-code, .audit-identifiers { font-size: var(--font-size-label); }
+.audit-identifiers { margin: 0; }
+.audit-identifiers dt { color: var(--color-text-secondary); }
+.audit-identifiers dd { margin: 0 0 var(--space-2); }
+.audit-identifiers dd:last-child { margin-block-end: 0; }
+.audit-mobile-label { display: none; }
+@media (max-width: 63.99rem) {
+  .audit-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .audit-table, .audit-table tbody, .audit-table tr, .audit-table td { display: block; }
+  .audit-table caption { display: block; }
+  .audit-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .audit-table tr { padding-block: var(--space-4); border-block-end: var(--border-size-thin) solid var(--color-border); }
+  .audit-table td { padding: var(--space-2) 0; border: 0; }
+  .audit-mobile-label { display: block; margin-block-end: var(--space-1); font-size: var(--font-size-label); color: var(--color-text-secondary); }
+}
+@media (max-width: 47.99rem) { .audit-workspace { padding: var(--space-4); } .audit-filters { grid-template-columns: minmax(0, 1fr); } }

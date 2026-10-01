@@ -42,14 +42,7 @@ const sectionRoutes: RouteRecordRaw[] = [
     path: "/audit",
     name: "audit",
     meta: { adminOnly: true },
-    component: () => import("@/views/SectionView.vue"),
-    props: {
-      title: "Аудит",
-      description: "Журнал решений и изменений политики безопасности.",
-      heading: "Журнал аудита ещё не подключён",
-      message:
-        "События будут отображаться здесь после появления защищённых операций.",
-    },
+    component: () => import("@/views/AuditView.vue"),
   },
 ];
 
