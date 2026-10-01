@@ -1,5 +1,6 @@
 """Private experiment HTTP surface, kept separate from the production application."""
 
+import asyncio
 from dataclasses import replace
 from uuid import UUID
 
@@ -8,7 +9,8 @@ from fastapi import FastAPI
 from starlette.responses import JSONResponse
 
 from experiments.host import ExperimentHost
-from experiments.observations import Observation
+from experiments.host_reads import document_list, source_read, stored_read
+from experiments.observations import ExperimentInterruptedError, Observation
 from experiments.scenario_types import FrozenModel, Principal
 from rag_access_guard import SourceRef
 from rag_access_guard_api.routes.auth_errors import register_auth_errors
@@ -31,15 +33,18 @@ def create_transport(host: ExperimentHost) -> httpx.ASGITransport:
 
     @app.post("/api/chat/messages")
     async def ask(payload: Question) -> MessageResponse:
-        return await host.ask(payload.action_id, payload.user_input)
+        try:
+            return await host.ask(payload.action_id, payload.user_input)
+        except asyncio.CancelledError:
+            raise ExperimentInterruptedError from None
 
     @app.get("/api/chat/thread")
     async def thread(action_id: str, reader: Principal) -> ThreadDetail:
-        return await host.stored_read(action_id, reader)
+        return await stored_read(host, action_id, reader)
 
     @app.get("/api/documents")
     async def documents(action_id: str) -> AccessibleDocuments:
-        return await host.document_list(action_id)
+        return await document_list(host, action_id)
 
     @app.get("/api/documents/source", response_model=None)
     async def source(
@@ -48,7 +53,8 @@ def create_transport(host: ExperimentHost) -> httpx.ASGITransport:
         version_id: UUID,
         chunk_id: UUID,
     ) -> SourceContent | JSONResponse:
-        result = await host.source_read(
+        result = await source_read(
+            host,
             action_id,
             SourceRef(
                 document_id=document_id,

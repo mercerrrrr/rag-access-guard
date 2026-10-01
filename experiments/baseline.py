@@ -17,7 +17,6 @@ from rag_access_guard import (
 from rag_access_guard.context import bound_context, matches_canonical, matches_history
 from rag_access_guard.fingerprint import fingerprint
 from rag_access_guard_api.adapters.canonical import CanonicalChunk, canonical_query
-from rag_access_guard_api.adapters.llm import FakeTokenCounter
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.persistence import DocumentChunk
 from rag_access_guard_api.schemas.search import InvalidProvenanceError
@@ -60,7 +59,7 @@ async def prepare_baseline(
     reader: PolicyReader,
 ) -> PreparedContext | PrepareDenied:
     """Keep new-candidate ACL and canonical history integrity, omitting only history ACL."""
-    counter = FakeTokenCounter()
+    counter = config.token_counter()
     fresh = await Guard(counter, config.max_context_tokens, config.max_prior_turns).prepare_context(
         uow.principal.principal_id, chunks, (), reader
     )
@@ -122,7 +121,7 @@ async def baseline_integrity(
         and prepared.fingerprint
         == fingerprint(
             prepared,
-            FakeTokenCounter().identity,
+            config.token_counter().identity,
             config.max_context_tokens,
             max_prior_turns=config.max_prior_turns,
         )

@@ -44,7 +44,7 @@ class ExperimentDatabases:
             raise ValueError(message)
         name = f"rag_guard_experiment_{uuid4().hex}"
         admin = url.set(drivername="postgresql").render_as_string(hide_password=False)
-        with psycopg.connect(admin, autocommit=True) as connection:
+        with psycopg.connect(admin, autocommit=True, connect_timeout=5) as connection:
             query = sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name))
             if template is not None:
                 query += sql.SQL(" TEMPLATE {}").format(sql.Identifier(template))
@@ -58,7 +58,7 @@ class ExperimentDatabases:
             message = "Refusing to remove an unowned database"
             raise ValueError(message)
         admin = self.url().set(drivername="postgresql").render_as_string(hide_password=False)
-        with psycopg.connect(admin, autocommit=True) as connection:
+        with psycopg.connect(admin, autocommit=True, connect_timeout=5) as connection:
             _ = connection.execute(
                 sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name))
             )
@@ -67,7 +67,13 @@ class ExperimentDatabases:
     @asynccontextmanager
     async def database(self, *, template: str | None = None) -> AsyncGenerator[tuple[str, str]]:
         """Bound disposable database lifetime without modifying process environment."""
-        name, url = await asyncio.to_thread(self.create, template)
+        allocation = asyncio.create_task(asyncio.to_thread(self.create, template))
+        try:
+            name, url = await asyncio.shield(allocation)
+        except asyncio.CancelledError:
+            name, _ = await allocation
+            await asyncio.to_thread(self.remove, name)
+            raise
         try:
             yield name, url
         finally:

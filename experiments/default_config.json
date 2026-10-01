@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "comparison": {
+    "seed": 63,
+    "max_context_tokens": 5000,
+    "max_prior_turns": 4,
+    "top_k": 5,
+    "renderer_identity": "rag-access-guard/context/v2",
+    "tokenizer_identity": "synthetic-unicode-words-punctuation-v1:rag-context-v1",
+    "model_identity": "synthetic-context-markers-v1"
+  },
+  "warmup_repetitions": 0
+}

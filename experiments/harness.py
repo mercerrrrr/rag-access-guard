@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
@@ -17,7 +17,7 @@ from experiments.database import ExperimentDatabases, migrate
 from experiments.fixture_manifest import FixtureManifest, load_fixture_manifest
 from experiments.host import ExperimentHost
 from experiments.mutations import Mutations
-from experiments.observations import Arm, ArmResult
+from experiments.observations import Arm, ArmRecord, ArmResult
 from experiments.ordering import Ordering
 from experiments.scenario_types import (
     Ask,
@@ -58,7 +58,8 @@ async def _ask(
     )
     ordering = Ordering(concurrent, mutations) if concurrent is not None else None
     host.ordering = ordering
-    async with asyncio.timeout(30), asyncio.TaskGroup() as group:
+    timeout = 30 if host.config.model_manifest is None else 150
+    async with asyncio.timeout(timeout), asyncio.TaskGroup() as group:
         if ordering is not None:
             _ = group.create_task(ordering.change())
         return await client.post(
@@ -77,12 +78,40 @@ class PairHarness:
     corpus_hash: str
     root: Path
     manifest: FixtureManifest
+    arm_records: list[ArmRecord] = field(default_factory=list)
+
+    def _result(self, host: ExperimentHost, config_hash: str) -> ArmResult:
+        return ArmResult(
+            arm=host.arm,
+            config_hash=config_hash,
+            corpus_hash=self.corpus_hash,
+            renderer_identity=host.config.renderer_identity,
+            tokenizer_identity=host.config.tokenizer_identity,
+            model_identity=host.config.model_identity,
+            observations=tuple(host.observations),
+            documents=tuple(sorted(self.corpus.documents.items())),
+            commit_order=tuple(host.ordering.commits) if host.ordering is not None else (),
+            attempts=tuple(host.attempts),
+        )
+
+    def _record(
+        self, host: ExperimentHost | None, result: ArmResult | None, config_hash: str
+    ) -> None:
+        if host is not None:
+            self.arm_records.append(
+                ArmRecord(
+                    status="completed" if result is not None else "failed",
+                    result=result or self._result(host, config_hash),
+                )
+            )
 
     async def run_arm(self, case: Scenario, config: ComparisonConfig, arm: Arm) -> ArmResult:
         """Run ordered actions against a private clone and return observed evidence."""
         config_hash = config.runtime_digest()
         async with self.databases.database(template=self.template) as (_, url):
             engine = create_async_engine(url, poolclass=NullPool, hide_parameters=True)
+            host: ExperimentHost | None = None
+            result: ArmResult | None = None
             try:
                 policy = PolicyUnitOfWork(engine)
                 host = ExperimentHost(
@@ -160,18 +189,10 @@ class PairHarness:
                                 raise ValueError(message)
                         capture_http(host, action.id, response)
                 _ = config.runtime_digest(expected=config_hash)
-                return ArmResult(
-                    arm=arm,
-                    config_hash=config_hash,
-                    corpus_hash=self.corpus_hash,
-                    renderer_identity=config.renderer_identity,
-                    tokenizer_identity=config.tokenizer_identity,
-                    model_identity=config.model_identity,
-                    observations=tuple(host.observations),
-                    documents=tuple(sorted(self.corpus.documents.items())),
-                    commit_order=tuple(host.ordering.commits) if host.ordering is not None else (),
-                )
+                result = self._result(host, config_hash)
+                return result
             finally:
+                self._record(host, result, config_hash)
                 await engine.dispose()
 
 

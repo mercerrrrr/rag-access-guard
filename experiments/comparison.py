@@ -5,7 +5,7 @@ from random import Random
 from typing import TYPE_CHECKING
 
 from experiments.comparison_config import ComparisonConfig
-from experiments.observations import Arm, PairResult
+from experiments.observations import Arm, ArmRecord, PairResult
 from experiments.scenario_types import Scenario
 
 if TYPE_CHECKING:
@@ -15,7 +15,11 @@ __all__ = ["ComparisonConfig", "assert_comparable", "run_pair"]
 
 
 async def run_pair(
-    case: Scenario, config: ComparisonConfig, harness: "ScenarioHarness"
+    case: Scenario,
+    config: ComparisonConfig,
+    harness: "ScenarioHarness",
+    *,
+    records: list[ArmRecord] | None = None,
 ) -> PairResult:
     """Execute both arms from separate clean databases in seeded order."""
     config.validate_runtime()
@@ -25,7 +29,11 @@ async def run_pair(
         else ("guarded", "baseline")
     )
     async with harness.open_pair(case, config) as snapshot:
-        results = {arm: await snapshot.run_arm(case, config, arm) for arm in order}
+        try:
+            results = {arm: await snapshot.run_arm(case, config, arm) for arm in order}
+        finally:
+            if records is not None:
+                records.extend(snapshot.arm_records)
     pair = PairResult(
         case_id=case.id,
         seed=config.seed,

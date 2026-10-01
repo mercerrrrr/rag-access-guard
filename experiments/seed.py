@@ -3,6 +3,8 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
+from hashlib import sha256
+from math import sqrt
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -23,6 +25,8 @@ from rag_access_guard_api.services.roles import create_role, set_membership
 from rag_access_guard_api.services.security import PolicyUnitOfWork, database_clock
 from rag_access_guard_api.services.tokens import issue_token, token_digest
 
+SYNTHETIC_RECIPE = "synthetic-text-hash-ranking-384-v2"
+
 
 @dataclass(frozen=True, slots=True)
 class SyntheticEmbedder:
@@ -33,8 +37,14 @@ class SyntheticEmbedder:
     dimension: int = 384
 
     async def embed_passages(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
-        """Give the same validated vector to every canonical test passage."""
-        return tuple((1.0, *(0.0 for _ in range(383))) for _ in texts)
+        """Rank distinct fixture text consistently, independently of allocated UUIDs."""
+        scores = tuple(
+            0.9 + 0.09 * int.from_bytes(sha256(text.encode()).digest()[:4]) / (2**32 - 1)
+            for text in texts
+        )
+        return tuple(
+            (score, sqrt(1 - score * score), *(0.0 for _ in range(382))) for score in scores
+        )
 
     async def embed_query(self, text: str) -> tuple[float, ...]:
         """Use the same query vector in both arms."""

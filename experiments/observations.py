@@ -9,6 +9,23 @@ from rag_access_guard import SourceRef
 
 type Arm = Literal["baseline", "guarded"]
 type Surface = Literal["model_context", "release", "stored_read", "source_read", "document_list"]
+type AttemptStatus = Literal["completed", "stale_discarded", "failed"]
+
+
+class ExperimentInterruptedError(Exception):
+    """Carry cancellation across HTTP task groups without losing its stop semantics."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AttemptEvidence:
+    """Every started generation attempt survives failure and stale retries."""
+
+    action_id: str
+    number: int
+    status: AttemptStatus
+    elapsed_ms: float
+    stage_ms: tuple[tuple[str, float], ...]
+    model_called: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -30,7 +47,7 @@ class Observation:
     cache_control: str = ""
     response_body: str = field(default="", repr=False)
     attempt_number: int | None = None
-    attempt_status: Literal["completed", "stale_discarded"] | None = None
+    attempt_status: AttemptStatus | None = None
     attempt_elapsed_ms: float | None = None
     http_elapsed_ms: float | None = None
 
@@ -58,6 +75,7 @@ class ArmResult:
     observations: tuple[Observation, ...]
     documents: tuple[tuple[str, UUID], ...]
     commit_order: tuple[str, ...] = ()
+    attempts: tuple[AttemptEvidence, ...] = ()
 
     @property
     def system_context_violation(self) -> bool:
@@ -80,3 +98,11 @@ class PairResult:
     baseline: ArmResult
     guarded: ArmResult
     comparison_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ArmRecord:
+    """Partial evidence is retained without promoting a failed arm to a valid pair."""
+
+    status: Literal["completed", "failed"]
+    result: ArmResult

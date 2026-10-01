@@ -7,13 +7,16 @@ from typing import Annotated
 from pydantic import Field
 
 from experiments.scenario_types import FrozenModel
+from experiments.seed import SYNTHETIC_RECIPE
 from rag_access_guard.context import RENDERER_REVISION
 from rag_access_guard_api.adapters.embeddings import MODEL_ID
 from rag_access_guard_api.adapters.llm import FakeTokenCounter
+from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION, TOKENIZER_IDENTITY
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.retrieval_config import load_retrieval_config
 from rag_access_guard_api.services.chunking import CHUNKER_REVISION
+from rag_access_guard_api.services.model_manifest import ModelManifest
 
 
 class ComparisonConfig(FrozenModel):
@@ -26,13 +29,32 @@ class ComparisonConfig(FrozenModel):
     renderer_identity: str = RENDERER_REVISION
     tokenizer_identity: str = FakeTokenCounter().identity
     model_identity: str = "synthetic-context-markers-v1"
+    model_manifest: ModelManifest | None = None
+
+    def token_counter(self) -> FakeTokenCounter | ModelTokenCounter:
+        """Use the same verified tokenizer in both arms, without synthetic fallback."""
+        return (
+            FakeTokenCounter()
+            if self.model_manifest is None
+            else ModelTokenCounter(self.model_manifest)
+        )
 
     def validate_runtime(self) -> None:
         """Reject claimed identities that do not match the adapters actually executed."""
+        expected_tokenizer = (
+            FakeTokenCounter().identity
+            if self.model_manifest is None
+            else sha256(self.model_manifest.model_dump_json().encode()).hexdigest()
+        )
+        expected_model = (
+            "synthetic-context-markers-v1"
+            if self.model_manifest is None
+            else f"{self.model_manifest.model_name}@{self.model_manifest.model_digest}"
+        )
         if (
             self.renderer_identity != RENDERER_REVISION
-            or self.tokenizer_identity != FakeTokenCounter().identity
-            or self.model_identity != "synthetic-context-markers-v1"
+            or self.tokenizer_identity != expected_tokenizer
+            or self.model_identity != expected_model
         ):
             message = "Experiment adapter identity mismatch"
             raise ValueError(message)
@@ -50,7 +72,7 @@ class ComparisonConfig(FrozenModel):
             retrieval.config_sha256,
             TOKENIZER_IDENTITY,
             CHUNKER_REVISION,
-            f"synthetic-constant-384-v1:{MODEL_ID}:{MODEL_REVISION}",
+            f"{SYNTHETIC_RECIPE}:{MODEL_ID}:{MODEL_REVISION}",
         )
         digest = sha256(json.dumps(identities, separators=(",", ":")).encode()).hexdigest()
         if expected is not None and expected != digest:
