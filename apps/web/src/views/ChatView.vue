@@ -112,9 +112,7 @@ async function selectTurn(id: string) {
         <ChatTurn
           v-for="turn in chat.thread.value?.turns ?? []"
           :key="turn.id"
-          :answer="turn.state === 'available' ? turn.answer : (turn.message ?? 'Ответ ещё готовится. Обновите диалог позже.')"
-          :sources="turn.sources"
-          :user-input="turn.user_input"
+          :turn="turn"
           :selected="chat.selectedTurn.value === turn.id"
           @select="selectTurn(turn.id)"
         />

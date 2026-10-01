@@ -34,3 +34,15 @@ it.each([
 ])("source_ref_mismatch_is_rejected: %s", (url) => {
   expect(sourceSchema.safeParse({ ...source, url }).success).toBe(false);
 });
+
+it.each([
+  { answer: "SYNTHETIC_SECRET_53", sources: [] },
+  { answer: null, sources: [source] },
+])("rejects_unavailable_payload_with_protected_fields: %j", async fields => {
+  vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ ...thread, turns: [{
+    ...reply.turn, state: "unavailable", message: "Ответ недоступен: права на один из источников изменились.",
+    ...fields,
+  }] })));
+
+  await expect(chatApi.detail(thread.id, new AbortController().signal)).rejects.toMatchObject({ status: 0 });
+});
