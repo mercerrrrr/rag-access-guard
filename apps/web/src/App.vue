@@ -19,11 +19,11 @@ watch(session.status, async (status) => {
 });
 
 function revalidate() {
-  if (!preview.value && session.status.value === "authenticated"
+  if (!preview.value && !session.protectedBlocked.value && session.status.value === "authenticated"
     && document.visibilityState === "visible") void session.refresh();
 }
 function restorePage(event: PageTransitionEvent) {
-  if (event.persisted && !preview.value) void session.refresh();
+  if (event.persisted && !preview.value && !session.protectedBlocked.value) void session.refresh();
 }
 onMounted(() => {
   document.addEventListener("visibilitychange", revalidate);
@@ -37,11 +37,14 @@ onBeforeUnmount(() => {
 
 <template>
   <RouterView
-    v-if="session.status.value === 'authenticated' && route.meta.chat"
+    v-if="session.status.value === 'authenticated' && !session.protectedBlocked.value && route.meta.chat"
     :key="session.sessionEpoch.value"
   />
   <AppShell v-else-if="session.status.value === 'authenticated' || preview">
-    <RouterView :key="session.sessionEpoch.value" />
+    <RouterView
+      v-if="!session.protectedBlocked.value"
+      :key="session.sessionEpoch.value"
+    />
   </AppShell>
   <main
     v-else

@@ -1,0 +1,30 @@
+import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, expect, it, vi } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
+import App from "@/App.vue";
+import PermissionsView from "@/views/PermissionsView.vue";
+import { accessApi } from "@/api/access";
+import { ApiError } from "@/api/errors";
+import type { UserSummary } from "@/api/accessTypes";
+import { sessionKey } from "@/composables/sessionContext";
+import { createSessionState } from "@/composables/useSession";
+import { deferred, sessionApi, student } from "@/test/session";
+
+afterEach(() => vi.restoreAllMocks());
+it.each([true, false])("epoch_keyed_view_stops_after_403_and_rechecks_identity_admin_%s", async admin => {
+  let first = true;
+  const me = vi.fn(() => { const is_admin = first || admin; first = false; return Promise.resolve({ user: { ...student, is_admin } }); });
+  const session = createSessionState(sessionApi({ me })); await session.refresh();
+  const parked = deferred<readonly UserSummary[]>();
+  const users = vi.spyOn(accessApi, "users").mockRejectedValueOnce(new ApiError(403)).mockImplementation(() => parked.promise);
+  vi.spyOn(accessApi, "roles").mockResolvedValue([]); vi.spyOn(accessApi, "documents").mockResolvedValue([]);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/access", component: PermissionsView }] });
+  await router.push("/access");
+  const wrapper = mount(App, { global: { plugins: [router], provide: { [sessionKey]: session } } });
+  await flushPromises();
+  expect(users).toHaveBeenCalledTimes(1); expect(me).toHaveBeenCalledTimes(2);
+  expect(session.status.value).toBe("authenticated"); expect(session.user.value?.is_admin).toBe(admin);
+  expect(session.protectedBlocked.value).toBe(true);
+  expect(wrapper.find("#grant-document").exists()).toBe(false);
+  expect(wrapper.text()).toContain("Обновить сессию"); wrapper.unmount();
+});

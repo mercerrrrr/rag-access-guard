@@ -10,6 +10,7 @@ export function createSessionState(api: SessionApi) {
   const busy = ref(false);
   const message = ref("");
   const logoutPending = ref(false);
+  const protectedBlocked = ref(false);
   const listeners = new Set<() => void>();
   let controller = new AbortController();
   let csrfToken = "";
@@ -27,6 +28,7 @@ export function createSessionState(api: SessionApi) {
   }
 
   function expire(reportExpiry = true) {
+    protectedBlocked.value = false;
     user.value = null;
     csrfToken = "";
     status.value = "anonymous";
@@ -52,6 +54,7 @@ export function createSessionState(api: SessionApi) {
       }
       user.value = result.user;
       status.value = "authenticated";
+      protectedBlocked.value = false;
     } catch (error) {
       if (epoch !== sessionEpoch.value) return;
       if (!(error instanceof ApiError)) throw error;
@@ -79,6 +82,7 @@ export function createSessionState(api: SessionApi) {
       csrfToken = result.csrf_token;
       user.value = result.user;
       status.value = "authenticated";
+      protectedBlocked.value = false;
     } catch (error) {
       if (epoch !== sessionEpoch.value) return;
       if (!(error instanceof ApiError)) throw error;
@@ -128,8 +132,29 @@ export function createSessionState(api: SessionApi) {
     }
   }
 
+  async function suspendAfterForbidden() {
+    protectedBlocked.value = true;
+    csrfToken = ""; user.value = null; status.value = "loading";
+    clearProtectedState();
+    const epoch = sessionEpoch.value;
+    try {
+      const result = await api.me(controller.signal);
+      if (epoch !== sessionEpoch.value) return;
+      user.value = result.user;
+      status.value = "authenticated";
+      message.value = errorMessage(new ApiError(403));
+    } catch (error) {
+      if (epoch !== sessionEpoch.value) return;
+      if (!(error instanceof ApiError)) throw error;
+      if (error.status === 401) { expire(); return; }
+      status.value = "unavailable";
+      message.value = errorMessage(error);
+    }
+  }
+
   async function runProtected<T>(operation: (signal: AbortSignal, token: string) => Promise<T>): Promise<T> {
     if (status.value !== "authenticated") throw new ApiError(401);
+    if (protectedBlocked.value) throw new ApiError(403);
     const epoch = sessionEpoch.value;
     try {
       const value = await operation(controller.signal, csrfToken);
@@ -139,8 +164,8 @@ export function createSessionState(api: SessionApi) {
       if (epoch !== sessionEpoch.value) throw new ApiError(0);
       if (!(error instanceof ApiError)) throw error;
       if (error.status === 401) expire();
+      else if (error.status === 403) await suspendAfterForbidden();
       else {
-        if (error.status === 403) csrfToken = "";
         clearProtectedState();
         message.value = errorMessage(error);
       }
@@ -150,7 +175,7 @@ export function createSessionState(api: SessionApi) {
 
   return {
     status: readonly(status), user: readonly(user), sessionEpoch: readonly(sessionEpoch),
-    busy: readonly(busy), message: readonly(message), logoutPending: readonly(logoutPending),
+    busy: readonly(busy), message: readonly(message), logoutPending: readonly(logoutPending), protectedBlocked: readonly(protectedBlocked),
     refresh, signIn, signOut, clearProtectedState, onClear, runProtected,
   };
 }

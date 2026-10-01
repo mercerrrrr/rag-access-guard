@@ -36,14 +36,7 @@ const sectionRoutes: RouteRecordRaw[] = [
     path: "/access",
     name: "access",
     meta: { adminOnly: true },
-    component: () => import("@/views/SectionView.vue"),
-    props: {
-      title: "Доступ",
-      description: "Пользователи, роли и правила доступа к документам.",
-      heading: "Настройки доступа ещё не подключены",
-      message:
-        "Управление прямыми и ролевыми разрешениями появится после реализации модели доступа.",
-    },
+    component: () => import("@/views/PermissionsView.vue"),
   },
   {
     path: "/audit",
