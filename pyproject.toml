@@ -29,7 +29,7 @@ members = ["apps/api", "packages/rag_access_guard"]
 typeCheckingMode = "all"
 pythonVersion = "3.13"
 pythonPlatform = "All"
-include = ["apps/api/src", "tests", "packages/rag_access_guard/src", "packages/rag_access_guard/tests", "scripts"]
+include = ["apps/api/src", "tests", "packages/rag_access_guard/src", "packages/rag_access_guard/tests", "scripts", "experiments"]
 exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
 reportUnusedCallResult = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
@@ -40,7 +40,7 @@ reportPrivateUsage = "error"
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["apps/api/src", "tests", "packages/rag_access_guard/src"]
+src = ["apps/api/src", "tests", "packages/rag_access_guard/src", "experiments"]
 
 [tool.ruff.lint]
 select = ["ALL"]

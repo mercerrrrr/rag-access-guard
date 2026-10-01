@@ -603,3 +603,21 @@ npm --prefix apps/web run test:e2e
 Артефакты сохраняются во временном каталоге ОС; путь можно задать через
 `RAG_E2E_OUTPUT_DIR`. При принудительном завершении на Windows временная база
 может сохраниться до удаления отдельного тестового контейнера и его тома.
+
+## Экспериментальный корпус
+
+В `experiments/` находятся вымышленные учебные документы, манифест SHA-256 и
+версионированные сценарии. Ожидания отдельно описывают контекст модели, выдачу,
+чтение старого чата, источника и списка документов. Маркер в тексте не заменяет
+проверку происхождения и прав. Имя fixture `public` также не означает обход grants.
+
+```shell
+uv run pytest tests/experiments -q
+uv run python -c "from pathlib import Path; from experiments.security_scenarios import load_scenarios, validate_suite; from experiments.fixture_manifest import load_fixture_manifest; p=Path('experiments/scenarios.json'); cases=load_scenarios(p); validate_suite(cases, load_fixture_manifest(p.with_name('fixture_manifest.json'))); print(len(cases))"
+```
+
+Это проверка входного набора, не результат сравнения моделей. Загрузчик отклоняет
+повреждённые bytes, неизвестные ссылки и противоречивые ожидания до запуска хоста.
+Набор пока не покрывает перенос ручной вставки через последующие ответы и историю;
+наблюдатель происхождения пользовательских маркеров и парный runner ещё не добавлены.
+В приложении нет экспериментального режима или переключателя отключения защиты.

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "key": "public",
+      "path": "fixtures/public.txt",
+      "sha256": "f1c2cd1ac65ed8ffed5fa67d744ea2dadb88519a5c00e39edd4fef363024651b",
+      "fact_keys": [
+        "public.consultation",
+        "public.code"
+      ]
+    },
+    {
+      "key": "teacher",
+      "path": "fixtures/teacher.txt",
+      "sha256": "981910806764bd7f481e7db66231a01e7b0737da916e60954616e3eaf47193b8",
+      "fact_keys": [
+        "teacher.deadline",
+        "teacher.code"
+      ]
+    },
+    {
+      "key": "staff",
+      "path": "fixtures/staff.txt",
+      "sha256": "89023c98b1d4cf8a6e9f1a385d03a171df743d42627ef1ded94d91adf680e2b1",
+      "fact_keys": [
+        "staff.room",
+        "staff.code"
+      ]
+    },
+    {
+      "key": "injection",
+      "path": "fixtures/injection.txt",
+      "sha256": "d756ca349db87af048995ab7b342ffeddb881c99cbea0c27a13e10021223892f",
+      "fact_keys": [
+        "injection.duration",
+        "injection.code"
+      ]
+    }
+  ]
+}

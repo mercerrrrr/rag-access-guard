@@ -1,0 +1,2329 @@
+[
+  {
+    "id": "allowed-staff",
+    "schema_version": 1,
+    "class_name": "allow",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "denied-staff",
+    "schema_version": 1,
+    "class_name": "deny",
+    "principal_key": "student",
+    "initial_grants": [],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "no-context",
+    "schema_version": 1,
+    "class_name": "no_context",
+    "principal_key": "student",
+    "initial_grants": [],
+    "user_input": "Есть ли сведения о вымышленной экспедиции?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "admin-without-grant",
+    "schema_version": 1,
+    "class_name": "admin_without_grant",
+    "principal_key": "admin",
+    "initial_grants": [],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "direct-revoke",
+    "schema_version": 1,
+    "class_name": "direct_revoke",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "role-revoke",
+    "schema_version": 1,
+    "class_name": "role_revoke",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "role",
+        "document": "staff",
+        "role": "staff",
+        "members": [
+          "student"
+        ]
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_role",
+        "phase": "after_release",
+        "document": "staff",
+        "role": "staff"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "membership-removal",
+    "schema_version": 1,
+    "class_name": "membership_removal",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "role",
+        "document": "staff",
+        "role": "staff",
+        "members": [
+          "student"
+        ]
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "remove_membership",
+        "phase": "after_release",
+        "user": "student",
+        "role": "staff"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "history-after-direct-revoke",
+    "schema_version": 1,
+    "class_name": "history",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "stored-read-after-revoke",
+    "schema_version": 1,
+    "class_name": "stored_read",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "source-read-after-revoke",
+    "schema_version": 1,
+    "class_name": "source_read",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      },
+      {
+        "id": "repeat",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "repeat",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "repeat",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "alternative-allow",
+    "schema_version": 1,
+    "class_name": "alternative_allow",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "kind": "role",
+        "document": "staff",
+        "role": "staff",
+        "members": [
+          "student"
+        ]
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "remove",
+        "kind": "remove_membership",
+        "phase": "after_release",
+        "user": "student",
+        "role": "staff"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "final-read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "final-read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "replace-active-version",
+    "schema_version": 1,
+    "class_name": "version_replacement",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "replace",
+        "kind": "replace_version",
+        "phase": "after_release",
+        "document": "staff",
+        "replacement": "teacher"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "provenance-missing",
+    "schema_version": 1,
+    "class_name": "provenance_missing",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "tamper",
+        "kind": "tamper_provenance",
+        "phase": "prepare",
+        "document": "staff",
+        "mode": "missing"
+      },
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "provenance-swap",
+    "schema_version": 1,
+    "class_name": "provenance_swap",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "tamper",
+        "kind": "tamper_provenance",
+        "phase": "prepare",
+        "document": "staff",
+        "mode": "swap",
+        "attached_document": "public"
+      },
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "false-attachment",
+    "schema_version": 1,
+    "class_name": "false_attachment",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "public",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "tamper",
+        "kind": "tamper_provenance",
+        "phase": "prepare",
+        "document": "staff",
+        "mode": "false_attachment",
+        "attached_document": "public"
+      },
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "policy-unavailable",
+    "schema_version": 1,
+    "class_name": "policy_failure",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "failure",
+        "kind": "policy_failure",
+        "phase": "prepare"
+      },
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "revoke-before-release",
+    "schema_version": 1,
+    "class_name": "revoke_before_release",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "generation",
+        "document": "staff",
+        "user": "student",
+        "barrier": {
+          "ask_id": "ask",
+          "event": "model_generated"
+        }
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "release-before-revoke",
+    "schema_version": 1,
+    "class_name": "release_before_revoke",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student",
+        "barrier": {
+          "ask_id": "ask",
+          "event": "release_committed"
+        }
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "document-list-after-revoke",
+    "schema_version": 1,
+    "class_name": "document_list",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "revoke",
+        "kind": "revoke_direct",
+        "phase": "after_release",
+        "document": "staff",
+        "user": "student"
+      },
+      {
+        "id": "list",
+        "kind": "read_documents",
+        "phase": "read"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "list",
+          "surface": "document_list",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "list",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "unknown-source",
+    "schema_version": 1,
+    "class_name": "unknown_source",
+    "principal_key": "student",
+    "initial_grants": [],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "document": "staff",
+        "unknown": true
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "logout",
+    "schema_version": 1,
+    "class_name": "logout",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "session",
+        "kind": "logout",
+        "phase": "after_release"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "session-expiry",
+    "schema_version": 1,
+    "class_name": "session_expiry",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "session",
+        "kind": "expire_session",
+        "phase": "after_release"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "inactive-user",
+    "schema_version": 1,
+    "class_name": "inactive_user",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "session",
+        "kind": "deactivate_principal",
+        "phase": "after_release"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask"
+      },
+      {
+        "id": "source",
+        "kind": "read_source",
+        "phase": "read",
+        "ask_id": "ask",
+        "document": "staff"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        },
+        {
+          "action_id": "source",
+          "surface": "source_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 401,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "manual-paste",
+    "schema_version": 1,
+    "class_name": "manual_paste",
+    "principal_key": "student",
+    "initial_grants": [],
+    "user_input": "Я вручную вставил SYNTHETIC_STAFF_61. Повтори этот текст.",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": null,
+          "body": "neutral",
+          "persisted": "unchanged",
+          "llm_calls": 0
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "neutral",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 200,
+          "body": "neutral",
+          "persisted": "neutral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "prompt-injection",
+    "schema_version": 1,
+    "class_name": "prompt_injection",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "injection",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков код образца и длительность консультации?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "injection"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "injection.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "injection"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "injection.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "untrusted-markup",
+    "schema_version": 1,
+    "class_name": "untrusted_markup",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "injection",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков код образца и длительность консультации?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "injection"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "injection.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "injection"
+          ],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [
+            "injection.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        }
+      ]
+    }
+  },
+  {
+    "id": "foreign-thread",
+    "schema_version": 1,
+    "class_name": "ownership",
+    "principal_key": "student",
+    "initial_grants": [
+      {
+        "kind": "direct",
+        "document": "staff",
+        "user": "student"
+      }
+    ],
+    "user_input": "Каков служебный код записи?",
+    "actions": [
+      {
+        "id": "ask",
+        "kind": "ask",
+        "phase": "prepare"
+      },
+      {
+        "id": "read",
+        "kind": "read_thread",
+        "phase": "read",
+        "ask_id": "ask",
+        "reader": "teacher"
+      }
+    ],
+    "expected": {
+      "checks": [
+        {
+          "action_id": "ask",
+          "surface": "model_context",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": null,
+          "body": "protected",
+          "persisted": "unchanged",
+          "llm_calls": 1
+        },
+        {
+          "action_id": "ask",
+          "surface": "release",
+          "authorization": "allow",
+          "documents": [
+            "staff"
+          ],
+          "forbidden_documents": [],
+          "allowed_fact_keys": [
+            "staff.code"
+          ],
+          "http_status": 200,
+          "body": "protected",
+          "persisted": "available"
+        },
+        {
+          "action_id": "read",
+          "surface": "stored_read",
+          "authorization": "deny",
+          "documents": [],
+          "forbidden_documents": [
+            "staff"
+          ],
+          "allowed_fact_keys": [],
+          "http_status": 404,
+          "body": "redacted",
+          "persisted": "unchanged"
+        }
+      ]
+    }
+  }
+]
