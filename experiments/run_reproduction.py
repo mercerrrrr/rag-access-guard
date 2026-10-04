@@ -3,6 +3,7 @@
 from hashlib import sha256
 from pathlib import Path
 
+from experiments.pair_admission import admit_pair
 from experiments.run_manifest import RunCounts, RunManifest
 from experiments.trials import TrialRecord
 
@@ -38,4 +39,6 @@ def load_reproduction(path: Path) -> RunManifest:
     ):
         message = "Reproduction records are incomplete or inconsistent"
         raise ValueError(message)
+    for record in records:
+        _ = admit_pair(record, manifest.identity)
     return manifest

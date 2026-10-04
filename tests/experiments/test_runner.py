@@ -9,6 +9,7 @@ from experiments.comparison_config import ComparisonConfig
 from experiments.fixture_manifest import load_fixture_manifest
 from experiments.harness import ScenarioHarness
 from experiments.host import ContextModel
+from experiments.run_config import RunConfig
 from experiments.run_manifest import RunIdentity, RunManifest, validate_reproduction
 from experiments.run_reproduction import load_reproduction
 from experiments.run_schedule import schedule_trials
@@ -28,7 +29,10 @@ def make_manifest(case_id: str, *, dirty: bool = False) -> RunManifest:
         started_at=datetime.now(UTC),
         identity=RunIdentity(
             git_sha="a" * 40,
-            config={},
+            config={
+                "llm": "fake",
+                "settings": RunConfig(comparison=config).model_dump(mode="json"),
+            },
             corpus_hash=sha256(
                 load_fixture_manifest(Path("experiments/fixture_manifest.json"))
                 .model_dump_json()
@@ -36,7 +40,7 @@ def make_manifest(case_id: str, *, dirty: bool = False) -> RunManifest:
             ).hexdigest(),
             scenario_hash="c" * 64,
             lock_hashes={},
-            model_tag="synthetic",
+            model_tag=config.model_identity,
             model_digest="d" * 64,
             runtime_config_hash="e" * 64,
             trial_config_hashes={
