@@ -16,6 +16,30 @@ from pathlib import Path, PurePosixPath
 
 type JsonValue = str | int | bool | list[JsonValue] | dict[str, JsonValue] | None
 
+SMOKE_CHECKS = frozenset(
+    {
+        "prepare_allowed",
+        "release_allowed",
+        "read_allowed",
+        "read_revoked",
+        "release_revoked",
+        "prepare_revoked",
+        "unknown_denied",
+        "other_principal_denied",
+    }
+)
+
+
+def validate_smoke(report: JsonValue) -> None:
+    """Require the complete public contract probe, without boolean coercion."""
+    if (
+        not isinstance(report, dict)
+        or frozenset(report) != SMOKE_CHECKS
+        or not all(value is True for value in report.values())
+    ):
+        message = "public_api_smoke_failed"
+        raise ValueError(message)
+
 
 def _decode(decoder: Callable[[str], JsonValue], text: str) -> JsonValue:
     return decoder(text)
@@ -141,7 +165,21 @@ def verify(wheel: Path) -> dict[str, JsonValue]:
         ):
             message = "standalone_contract_failed"
             raise ValueError(message)
-        return {"wheel_sha256": digest, "pip_check": check.strip(), "exit_code": 0, "demo": report}
+        smoke = Path(
+            shutil.copy2(
+                Path(__file__).resolve().parents[1] / "tests/release/installed_guard_smoke.py",
+                directory / "installed_guard_smoke.py",
+            )
+        )
+        smoke_report = _decode(json.loads, _run([python, "-I", str(smoke)], directory, environment))
+        validate_smoke(smoke_report)
+        return {
+            "wheel_sha256": digest,
+            "pip_check": check.strip(),
+            "exit_code": 0,
+            "demo": report,
+            "public_api_smoke": smoke_report,
+        }
 
 
 class Arguments(argparse.Namespace):

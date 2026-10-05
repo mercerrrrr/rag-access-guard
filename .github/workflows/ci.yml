@@ -61,7 +61,7 @@ jobs:
   python-api:
     name: Python and API
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       COMPOSE_PROJECT_NAME: rag-access-guard-ci-${{ github.run_id }}-${{ github.run_attempt }}
       POSTGRES_DB: rag_access_guard
@@ -166,6 +166,17 @@ jobs:
           ready_response="$(curl --fail --silent --show-error http://127.0.0.1:8000/api/health/ready)"
           test "${live_response}" = '{"status":"ok"}'
           test "${ready_response}" = '{"status":"ok"}'
+
+      - name: Reproduce complete synthetic security experiment
+        run: |
+          set -euo pipefail
+          export RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET="$(uv run --frozen python -c 'import secrets; print(secrets.token_hex(32))')"
+          experiment_dir="$(mktemp -d "${RUNNER_TEMP}/guard-experiment-XXXXXX")"
+          uv run --frozen python -m experiments.run --llm fake --output "${experiment_dir}/original"
+          uv run --frozen python -m experiments.run --llm fake --output "${experiment_dir}/repeated" --reproduce "${experiment_dir}/original/manifest.json"
+          uv run --frozen python -m experiments.summarize --run "${experiment_dir}/original" --output "${experiment_dir}/summary-original"
+          uv run --frozen python -m experiments.summarize --run "${experiment_dir}/repeated" --output "${experiment_dir}/summary-repeated"
+          uv run --frozen python -m experiments.verify_reproduction --original "${experiment_dir}/original" --repeated "${experiment_dir}/repeated" --repository "${GITHUB_WORKSPACE}"
 
       - name: Stop PostgreSQL
         if: always()
