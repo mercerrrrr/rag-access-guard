@@ -1,10 +1,12 @@
 """Provenance-aware generation with no database locks across model inference."""
 
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Final, assert_never
 from uuid import UUID
 
 import anyio
+from anyio.to_thread import run_sync
 
 from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
 from rag_access_guard.context import matches_history
@@ -19,8 +21,14 @@ from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
 from rag_access_guard_api.services.chat_read import read_turn
+from rag_access_guard_api.services.chat_release import (
+    Generated,
+    Neutral,
+    StaleGeneration,
+    release_result,
+)
 from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
-from rag_access_guard_api.services.chat_reservation import reserve
+from rag_access_guard_api.services.chat_reservation import active_lease, reserve, resolve_request
 from rag_access_guard_api.services.chat_state import (
     ChatConflict,
     GenerationAttempt,
@@ -29,38 +37,17 @@ from rag_access_guard_api.services.chat_state import (
 )
 from rag_access_guard_api.services.chat_turns import ReleasedAnswer, complete_turn, load_turns
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.query_validation import validate_query
 from rag_access_guard_api.services.retrieval import retrieve
 from rag_access_guard_api.services.security import (
     PolicyUnitOfWork,
-    ReadUoW,
     database_clock,
     revalidate_session,
 )
 from rag_access_guard_api.services.tokens import matches_token
 
 MAX_ANSWER_BYTES: Final = 65536
-
-
-@dataclass(frozen=True, slots=True)
-class Generated:
-    """Unreleased model output, never serialized or logged."""
-
-    attempt: GenerationAttempt
-    body: str = field(repr=False)
-    counter: TokenCounter
-
-
-@dataclass(frozen=True, slots=True)
-class Neutral:
-    """A server-only completion with no model output."""
-
-    attempt: Reservation
-    reason: NeutralReason
-
-
-@dataclass(frozen=True, slots=True)
-class StaleGeneration:
-    """Carry no discarded model output or prepared context into the next attempt."""
+__all__ = ("ChatService", "Generated", "Neutral", "StaleGeneration")
 
 
 type Completion = MessageResponse | ChatConflict | StaleGeneration
@@ -82,6 +69,16 @@ class ChatService:
         request: MessageRequest,
     ) -> MessageResponse | ChatConflict:
         """Reserve, prepare, generate, reauthorize and commit before returning."""
+        async with self.policy.protected_read(session_token) as uow:
+            if not matches_token(self.csrf_token, uow.csrf_digest):
+                raise ForbiddenError
+            resolved = await resolve_request(uow, thread_id, request, session_token=session_token)
+        if resolved is not None:
+            return resolved
+        counter = await run_sync(llm.get_token_counter)
+        if counter is None:
+            raise llm.LLMUnavailableError
+        await run_sync(partial(validate_query, request.user_input, model_counter=counter))
         async with self.policy.protected_read(session_token) as uow:
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
@@ -204,25 +201,9 @@ class ChatService:
                 or not matches_token(self.csrf_token, uow.csrf_digest)
             ):
                 raise ForbiddenError
-            thread = await get_owned_thread(uow, reservation.thread_id, lock=True)
-            await revalidate_session(uow, session_token)
-            turn = next(
-                (
-                    t
-                    for t in await load_turns(uow, thread.id)
-                    if t.request_id == reservation.request_id
-                ),
-                None,
-            )
+            expiry = await active_lease(uow, reservation, session_token=session_token)
             now = await database_clock(uow.connection)
-            return (
-                thread.revision == reservation.thread_revision
-                and turn is not None
-                and turn.expected_thread_revision == reservation.thread_revision
-                and turn.state == "pending"
-                and turn.lease_expires_at is not None
-                and now < turn.lease_expires_at
-            )
+            return expiry is not None and now < expiry
 
     async def _complete(
         self,
@@ -256,7 +237,7 @@ class ChatService:
             now = await database_clock(uow.connection)
             result: ReleasedAnswer | NeutralReason | StaleGeneration = "interrupted"
             if turn.lease_expires_at is not None and now < turn.lease_expires_at:
-                result = await _release_result(uow, outcome)
+                result = await release_result(uow, outcome)
             await revalidate_session(uow, session_token)
             if (
                 turn.lease_expires_at is None
@@ -273,23 +254,3 @@ class ChatService:
                     thread_revision=revision, turn=await read_turn(uow, completed), replayed=False
                 )
         return response
-
-
-async def _release_result(
-    uow: ReadUoW, outcome: Generated | Neutral
-) -> ReleasedAnswer | NeutralReason | StaleGeneration:
-    if isinstance(outcome, Neutral):
-        return outcome.reason
-    generated = outcome.attempt
-    canonical_history = await load_prior_turns(uow, generated.thread_id)
-    release = await Guard(outcome.counter).authorize_release(
-        generated.principal_id,
-        generated.thread_id,
-        generated.prepared,
-        PostgresPolicyReader(uow),
-    )
-    if not release.allowed and release.reason == "stale_revision":
-        return StaleGeneration()
-    if release.allowed and matches_history(generated.prepared, canonical_history):
-        return ReleasedAnswer(outcome.body, generated.prepared.source_refs)
-    return "policy_changed"

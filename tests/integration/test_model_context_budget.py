@@ -13,6 +13,7 @@ from rag_access_guard.context import bound_context, render_context
 from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.adapters.ollama import OllamaAdapter
+from rag_access_guard_api.adapters.tokenizer import get_tokenizer
 from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.services.model_manifest import ModelManifest
 from tests.support.chat import ChatHttp
@@ -86,8 +87,9 @@ def test_exact_question_token_limit_is_checked_before_reservation(
 ) -> None:
     counter = ModelTokenCounter(ModelManifest())
     monkeypatch.setattr(llm, "get_token_counter", lambda: counter)
-    question = " x" * size
+    question = "🧬" * 512 + " x" * (size - 1024)
     assert counter.count(question) == size
+    assert get_tokenizer().embedding_input_tokens(question, kind="query") <= 512
     response = chat_case.client.post(
         f"/api/chat/threads/{chat_case.thread}/messages",
         json=MessageRequest(
@@ -98,6 +100,7 @@ def test_exact_question_token_limit_is_checked_before_reservation(
     assert response.status_code == (200 if size == 1024 else 422)
     assert chat_case.model.call_count == (1 if size == 1024 else 0)
     if size > 1024:
+        assert response.json() == {"detail": {"code": "query_too_long"}}
         assert chat_case.read().turns == ()
     else:
         assert chat_case.model.inputs[0][0] == question

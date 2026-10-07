@@ -4,6 +4,8 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
+from rag_access_guard import TokenCounter
+from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.schemas.chat import MessageRequest
 from tests.support.chat import ChatHttp
 from tests.support.chat_generation import ChatCase
@@ -26,6 +28,32 @@ def test_completed_replay_is_reauthorized_without_generation(chat_case: ChatCase
     assert replay.turn.answer is None
     assert replay.turn.sources == ()
     assert chat_case.model.call_count == 1
+
+
+@pytest.mark.parametrize("revoked", [False, True])
+def test_completed_replay_works_with_unavailable_counter(
+    chat_case: ChatCase, monkeypatch: pytest.MonkeyPatch, *, revoked: bool
+) -> None:
+    payload = question()
+    first = chat_case.send(payload)
+    if revoked:
+        chat_case.revoke()
+
+    def unavailable() -> TokenCounter:
+        raise llm.LLMUnavailableError
+
+    monkeypatch.setattr(llm, "get_token_counter", unavailable)
+    replay = chat_case.send(payload)
+    assert replay.replayed
+    assert replay.turn.request_id == first.turn.request_id
+    assert chat_case.model.call_count == 1
+    if revoked:
+        assert replay.turn.state == "unavailable"
+        assert replay.turn.answer is None
+        assert replay.turn.sources == ()
+        assert "Synthetic" not in replay.model_dump_json()
+    else:
+        assert replay.turn == first.turn
 
 
 @pytest.mark.parametrize("change", ["payload", "revision", "new_id"])

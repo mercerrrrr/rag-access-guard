@@ -1,5 +1,5 @@
 import { computed, readonly, ref } from "vue";
-import { ApiError } from "@/api/errors";
+import { ApiError, errorMessage } from "@/api/errors";
 import { protectedResult } from "@/api/protectedResult";
 import type { ChatApi, MessageRequest, ThreadDetail, ThreadView } from "@/api/types";
 import { createSourceInspector } from "@/composables/useSourceInspector";
@@ -109,7 +109,8 @@ export function createChatState(api: ChatApi, session: SessionState) {
         }
       } else if (result.error.status === 422) {
         retryRequest.value = null;
-        message.value = "Вопрос не принят. Сократите его до 1024 токенов и 16 КиБ, затем отправьте снова.";
+        message.value = result.error.code === "query_too_long" ? errorMessage(result.error)
+          : "Вопрос не принят. Проверьте текст и отправьте его снова.";
       } else {
         message.value = "Ответ не получен. Обновите диалог или повторите тот же запрос без создания нового вопроса.";
       }

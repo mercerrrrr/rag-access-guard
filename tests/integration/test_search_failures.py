@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from rag_access_guard_api.adapters import embeddings
 from rag_access_guard_api.adapters.tokenizer import E5TokenCounter, TokenizerUnavailableError
-from rag_access_guard_api.services import search
+from rag_access_guard_api.services import query_validation
 from tests.integration.embedding_fixtures import DeterministicEmbedder
 from tests.integration.search_fixtures import configure_search
 
@@ -48,7 +48,7 @@ def test_tokenizer_failure_is_sanitized_service_failure(
     def unavailable() -> E5TokenCounter:
         raise TokenizerUnavailableError
 
-    monkeypatch.setattr(search, "get_tokenizer", unavailable)
+    monkeypatch.setattr(query_validation, "get_tokenizer", unavailable)
     response = admin_client.post(
         "/api/search",
         json={"query": "PRIVATE_QUERY"},

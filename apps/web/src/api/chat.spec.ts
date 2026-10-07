@@ -2,8 +2,19 @@ import { afterEach, expect, it, vi } from "vitest";
 import { chatApi } from "@/api/chat";
 import { reply, thread } from "@/test/chat";
 import { sourceSchema } from "@/api/types";
+import { ApiError, errorMessage } from "@/api/errors";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+it("too_long_query_has_a_closed_user_message", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ detail: { code: "query_too_long" } }, { status: 422 })));
+  const result = await chatApi.send(thread.id, { request_id: reply.turn.request_id,
+    user_input: reply.turn.user_input, expected_thread_revision: 0 }, "csrf", new AbortController().signal)
+    .catch((error: unknown) => error);
+  expect(result).toBeInstanceOf(ApiError);
+  if (!(result instanceof ApiError)) throw new Error("Expected typed API failure");
+  expect(errorMessage(result)).toBe("Вопрос слишком длинный. Сократите его и попробуйте ещё раз.");
+});
 
 it("generation_waits_past_normal_transport_timeout", async () => {
   vi.useFakeTimers();

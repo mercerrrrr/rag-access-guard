@@ -28,6 +28,7 @@ from rag_access_guard_api.services.errors import (
     RoleConflictError,
     UnauthenticatedError,
 )
+from rag_access_guard_api.services.query_validation import QueryTooLongError
 from rag_access_guard_api.services.text_documents import DocumentError
 
 
@@ -81,6 +82,10 @@ async def _thread_not_found(_request: Request, _: ThreadNotFound) -> JSONRespons
     return JSONResponse(status_code=404, content={"detail": "Not found"})
 
 
+async def _query_too_long(_request: Request, _: QueryTooLongError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": {"code": "query_too_long"}})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
@@ -94,6 +99,7 @@ def register_auth_errors(app: FastAPI) -> None:
     _ = app.exception_handler(RetrievalNotConfiguredError)(_search_unconfigured)
 
     _ = app.exception_handler(ThreadNotFound)(_thread_not_found)
+    _ = app.exception_handler(QueryTooLongError)(_query_too_long)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:

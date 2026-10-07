@@ -1,6 +1,11 @@
 import ky from "ky";
+import { z } from "zod";
 
 import { ApiError } from "@/api/errors";
+
+const queryErrorSchema = z.strictObject({
+  detail: z.strictObject({ code: z.literal("query_too_long") }),
+});
 
 export type JsonRequest<T> = {
   readonly parse: (value: unknown) => T;
@@ -32,8 +37,18 @@ export async function requestJson<T>(path: string, options: JsonRequest<T>): Pro
     if (!response.ok) {
       const raw = response.headers.get("Retry-After");
       const seconds = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
+      let code: "query_too_long" | null = null;
+      if (response.status === 422) {
+        try {
+          const body: unknown = await response.json();
+          const parsed = queryErrorSchema.safeParse(body);
+          if (parsed.success) code = parsed.data.detail.code;
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+        }
+      }
       throw new ApiError(response.status,
-        Number.isSafeInteger(seconds) && seconds <= 86400 ? seconds : null);
+        Number.isSafeInteger(seconds) && seconds <= 86400 ? seconds : null, code);
     }
     const body: unknown = response.status === 204 ? undefined : await response.json();
     return options.parse(body);

@@ -9,13 +9,13 @@ from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.routes.auth import AuthCookies, check_origin
 from rag_access_guard_api.schemas.chat import (
-    MAX_INPUT_TOKENS,
     CreateThread,
     MessageRequest,
     MessageResponse,
     ThreadDetail,
     ThreadView,
 )
+from rag_access_guard_api.schemas.search import SearchError
 from rag_access_guard_api.services.chat import ChatService
 from rag_access_guard_api.services.chat_read import read_thread
 from rag_access_guard_api.services.chat_repository import (
@@ -24,6 +24,7 @@ from rag_access_guard_api.services.chat_repository import (
 )
 from rag_access_guard_api.services.chat_state import ChatConflict
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.query_validation import QueryTooLongError
 from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.tokens import matches_token
 
@@ -74,17 +75,16 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
             raise HTTPException(422, "Invalid request")
         credentials = cookies.credentials(request)
         try:
-            counter = llm.get_token_counter()
-        except llm.LLMUnavailableError:
+            result = await ChatService(
+                policy,
+                credentials.csrf,
+                generation_timeout_seconds=settings.generation_timeout_seconds,
+                pending_lease_seconds=settings.pending_lease_seconds,
+            ).generate_turn(credentials.session, thread_id, payload)
+        except QueryTooLongError:
+            raise
+        except (llm.LLMUnavailableError, SearchError):
             raise HTTPException(503, "Service unavailable") from None
-        if counter is not None and counter.count(payload.user_input) > MAX_INPUT_TOKENS:
-            raise HTTPException(422, "Invalid user input")
-        result = await ChatService(
-            policy,
-            credentials.csrf,
-            generation_timeout_seconds=settings.generation_timeout_seconds,
-            pending_lease_seconds=settings.pending_lease_seconds,
-        ).generate_turn(credentials.session, thread_id, payload)
         match result:
             case ChatConflict(reason=reason):
                 raise HTTPException(409, reason)

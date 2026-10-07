@@ -7,7 +7,6 @@ from rag_access_guard_api.adapters.embeddings import MODEL_ID, EmbeddingAdapter
 from rag_access_guard_api.adapters.tokenizer import (
     MODEL_REVISION,
     TokenizerUnavailableError,
-    get_tokenizer,
 )
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError, validate_vectors
 from rag_access_guard_api.schemas.search import (
@@ -16,8 +15,8 @@ from rag_access_guard_api.schemas.search import (
     InvalidSearchError,
     SearchError,
 )
-from rag_access_guard_api.services.chunking import EMBEDDING_LIMIT
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.query_validation import QueryTooLongError, validate_query
 from rag_access_guard_api.services.retrieval import retrieve
 from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.tokens import matches_token
@@ -44,11 +43,11 @@ async def search_documents(  # noqa: PLR0913
         if not matches_token(csrf_token, initial.csrf_digest):
             raise ForbiddenError
     try:
-        query_tokens = get_tokenizer().embedding_input_tokens(query, kind="query")
+        validate_query(query, model_counter=None)
+    except QueryTooLongError as error:
+        raise InvalidSearchError from error
     except (OSError, TokenizerUnavailableError) as error:
         raise SearchError from error
-    if query_tokens > EMBEDDING_LIMIT:
-        raise InvalidSearchError
     if embedder.model_id != MODEL_ID or embedder.revision != MODEL_REVISION:
         raise EmbeddingError
     try:

@@ -190,3 +190,17 @@ it("replay_of_an_earlier_turn_preserves_canonical_history_order", async () => {
   await state.retry();
   expect(state.thread.value?.turns.map(turn => turn.user_input)).toEqual(["Вопрос А", "Вопрос Б"]);
 });
+
+it("query_too_long_displays_closed_message_without_reserving_local_retry", async () => {
+  const session = createSessionState(sessionApi());
+  await session.refresh();
+  const state = createChatState(chatApi({
+    send: () => Promise.reject(new ApiError(422, null, "query_too_long")),
+  }), session);
+  await state.loadThread(thread.id);
+  await state.sendQuestion("Длинный вопрос");
+  expect(state.message.value).toBe("Вопрос слишком длинный. Сократите его и попробуйте ещё раз.");
+  expect(state.retryRequest.value).toBeNull();
+  expect(state.thread.value?.turns).toEqual([]);
+  expect(state.sending.value).toBe(false);
+});

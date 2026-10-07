@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 
 import { requestJson } from "@/api/client";
+import { ApiError, errorMessage } from "@/api/errors";
 import { csrfSchema, sessionSchema } from "@/api/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -50,4 +51,26 @@ it("malformed_identity_does_not_become_a_typed_session", async () => {
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ user: { is_admin: "true" } })));
   await expect(requestJson("/api/auth/me", { parse: (value) => sessionSchema.parse(value) }))
     .rejects.toMatchObject({ name: "ApiError", status: 0 });
+});
+
+it.each([
+  { detail: { code: "unknown", message: "private-text" } },
+  { detail: { code: "query_too_long", message: "private-text" } },
+  { detail: { code: "query_too_long" }, query: "private-text" },
+  { detail: "private-text" },
+])("does_not_promote_unrecognized_422_body_to_public_error_code", async (body) => {
+  vi.stubGlobal("fetch", () => Promise.resolve(Response.json(body, { status: 422 })));
+  const error: unknown = await requestJson("/api/chat/threads", {
+    parse: (value) => csrfSchema.parse(value),
+  }).catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(ApiError);
+  if (!(error instanceof ApiError)) throw new Error("Expected sanitized HTTP error");
+  expect(error).toMatchObject({ status: 422, code: null, message: "Request failed" });
+  expect(errorMessage(error)).not.toContain("private-text");
+});
+
+it("keeps_malformed_422_json_as_a_sanitized_http_error", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("private-text", { status: 422 })));
+  await expect(requestJson("/api/chat/threads", { parse: (value) => csrfSchema.parse(value) }))
+    .rejects.toMatchObject({ status: 422, code: null, message: "Request failed" });
 });
