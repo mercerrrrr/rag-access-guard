@@ -2,10 +2,15 @@
 
 import re
 from dataclasses import dataclass
+from functools import partial
 from typing import Protocol, assert_never
+
+import anyio
+from anyio.to_thread import run_sync
 
 from rag_access_guard import TokenCounter
 from rag_access_guard_api.adapters.inference_runtime import (
+    InferenceBusyError,
     InferenceUnavailableError,
     current_runtime,
 )
@@ -16,7 +21,7 @@ from rag_access_guard_api.adapters.ollama_identity import verify_model
 from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor, load_supervisor_config
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.generation import GenerationUnavailable
-from rag_access_guard_api.services.model_manifest import ModelManifest
+from rag_access_guard_api.services.model_profiles import get_model_profile
 
 LLMUnavailableError = GenerationUnavailable
 
@@ -93,11 +98,40 @@ def get_token_counter() -> TokenCounter | None:
 async def initialize_llm(settings: Settings) -> None:
     """Real generation requires a verified local tokenizer and model at startup."""
     if settings.llm_adapter == "ollama":
+        supervisor: OllamaSupervisor | None = None
         if settings.ollama_supervisor_config_path is not None:
             config = load_supervisor_config(settings.ollama_supervisor_config_path)
             supervisor = current_runtime().own_supervisor(OllamaSupervisor(config))
-            if config.host != settings.ollama_base_url or supervisor.status() != "ready":
-                raise InferenceUnavailableError
-        _ = get_model_counter()
-        async with create_client(settings.ollama_base_url) as client:
-            await verify_model(client, ModelManifest())
+            if config.host != settings.ollama_base_url:
+                message = "Supervisor host differs from the configured model endpoint"
+                raise ValueError(message)
+        try:
+            with anyio.fail_after(5):
+                if (
+                    supervisor is not None
+                    and await run_sync(supervisor.status, abandon_on_cancel=True) != "ready"
+                ):
+                    current_runtime().set_model_available(available=False)
+                    return
+                _ = await run_sync(
+                    partial(get_model_counter, settings.model_profile), abandon_on_cancel=True
+                )
+                async with create_client(settings.ollama_base_url) as client:
+                    await verify_model(client, get_model_profile(settings.model_profile).manifest)
+        except (LLMUnavailableError, InferenceUnavailableError, TimeoutError):
+            current_runtime().set_model_available(available=False)
+            return
+        current_runtime().set_model_available(available=True)
+
+
+async def ensure_llm_available() -> None:
+    """Recheck an offline model before admission, never reopening physical quarantine."""
+    runtime = current_runtime()
+    if runtime.generation_quarantined:
+        raise InferenceUnavailableError
+    if runtime.generation_busy:
+        raise InferenceBusyError
+    if not runtime.model_available:
+        await initialize_llm(Settings())
+        if not runtime.model_available:
+            raise InferenceUnavailableError

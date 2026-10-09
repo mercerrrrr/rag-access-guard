@@ -9,11 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from rag_access_guard_api.adapters.ollama_http import bounded_request
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
-from rag_access_guard_api.services.model_manifest import (
-    OLLAMA_VERSION,
-    TEMPLATE_SHA256,
-    ModelManifest,
-)
+from rag_access_guard_api.services.model_profiles import GenerationManifest, profile_for_manifest
 
 
 class RuntimeVersion(BaseModel):
@@ -56,8 +52,9 @@ class ModelMetadata(BaseModel):
     messages: tuple[()] = ()
 
 
-async def verify_model(client: httpx2.AsyncClient, manifest: ModelManifest) -> None:
+async def verify_model(client: httpx2.AsyncClient, manifest: GenerationManifest) -> None:
     """Fail closed on unavailable metadata, moving tags or changed serialization."""
+    profile = profile_for_manifest(manifest)
     try:
         with anyio.fail_after(15):
             version = RuntimeVersion.model_validate_json(
@@ -69,10 +66,10 @@ async def verify_model(client: httpx2.AsyncClient, manifest: ModelManifest) -> N
             )
             matches = [m for m in models.models if m.name == manifest.model_name]
             if (
-                version.version != OLLAMA_VERSION
+                version.version != profile.runtime_version
                 or len(matches) != 1
                 or matches[0].digest != manifest.model_digest
-                or sha256(metadata.template.encode()).hexdigest() != TEMPLATE_SHA256
+                or sha256(metadata.template.encode()).hexdigest() != profile.template_sha256
                 or manifest.context_window > metadata.model_info.context_length
             ):
                 raise LLMUnavailableError

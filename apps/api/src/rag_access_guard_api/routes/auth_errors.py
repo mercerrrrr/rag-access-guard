@@ -44,7 +44,14 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
         """Attach response policy after endpoint and exception processing."""
         response = await call_next(request)
         if request.url.path.startswith(
-            ("/api/auth/", "/api/admin/", "/api/documents", "/api/search", "/api/chat/")
+            (
+                "/api/auth/",
+                "/api/admin/",
+                "/api/documents",
+                "/api/search",
+                "/api/chat/",
+                "/api/system/",
+            )
         ):
             response.headers["Cache-Control"] = "private, no-store"
             response.headers["Vary"] = "Cookie"
@@ -122,9 +129,20 @@ def register_auth_errors(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
         headers = (
-            {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+            {
+                "Cache-Control": "private, no-store",
+                "Vary": "Cookie",
+                "X-Content-Type-Options": "nosniff",
+            }
             if request.url.path.startswith(
-                ("/api/auth/", "/api/admin/", "/api/documents", "/api/search", "/api/chat/")
+                (
+                    "/api/auth/",
+                    "/api/admin/",
+                    "/api/documents",
+                    "/api/search",
+                    "/api/chat/",
+                    "/api/system/",
+                )
             )
             else None
         )

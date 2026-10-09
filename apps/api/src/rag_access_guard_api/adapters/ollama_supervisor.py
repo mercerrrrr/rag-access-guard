@@ -162,6 +162,20 @@ class OllamaSupervisor:
             finally:
                 job.close()
 
+    def has_live_inference_claim(self) -> bool:
+        """Recognize only this controller's current claim in verified live containment."""
+        claim = self._claim
+        if claim is None:
+            return False
+        state = self._ownership()
+        if state != claim or not state.root.alive():
+            return False
+        job = WindowsJob(state.job_name)
+        try:
+            return job.contains(state.root.pid)
+        finally:
+            job.close()
+
     def close_recovery_child(self) -> None:
         """Stop/reap only the child spawned by this owner, never another live claim."""
         with self._coordination():

@@ -87,6 +87,7 @@ class ChatService:
         if counter is None:
             raise llm.LLMUnavailableError
         await run_sync(partial(validate_query, request.user_input, model_counter=counter))
+        await llm.ensure_llm_available()
         async with self.runtime.try_acquire_generation(principal_id):
             return await self._reserve_and_generate(session_token, thread_id, request)
 

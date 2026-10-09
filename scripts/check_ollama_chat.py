@@ -12,15 +12,20 @@ from time import monotonic
 
 import anyio
 
-from rag_access_guard_api.adapters.ollama import OllamaAdapter
+from rag_access_guard_api.adapters.llm import get_llm_adapter
+from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.generation import GenerationUnavailable
 
 
 async def main() -> None:
     """Use only synthetic input and print final content, never model reasoning."""
     started = monotonic()
+    settings = Settings()
+    if settings.llm_adapter != "ollama":
+        print("Local generation requires the ollama adapter.")  # noqa: T201
+        raise SystemExit(1)
     try:
-        adapter = OllamaAdapter()
+        adapter = get_llm_adapter()
         answer = await adapter.generate(
             user_input="Which two safeguards are required for corporate remote access?",
             system_supplied_context="Corporate remote access requires VPN and MFA.",
@@ -29,7 +34,7 @@ async def main() -> None:
         print("Local generation unavailable; verification failed.")  # noqa: T201
         raise SystemExit(1) from None
     print(answer)  # noqa: T201
-    print(f"Verified local generation: {monotonic() - started:.2f}s")  # noqa: T201
+    print(f"{settings.model_profile}: {monotonic() - started:.2f}s")  # noqa: T201
 
 
 if __name__ == "__main__":

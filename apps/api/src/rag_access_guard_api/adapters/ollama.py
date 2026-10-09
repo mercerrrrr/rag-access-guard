@@ -7,14 +7,13 @@ import anyio
 import httpx2
 import psutil
 from anyio.to_thread import run_sync
-from pydantic import ValidationError
+from pydantic import JsonValue, TypeAdapter, ValidationError
 
 from rag_access_guard_api.adapters.inference_runtime import (
     InferenceRuntime,
     InferenceUnavailableError,
     current_runtime,
 )
-from rag_access_guard_api.adapters.model_messages import build_messages
 from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter, get_model_counter
 from rag_access_guard_api.adapters.ollama_http import (
     TIMEOUT_SECONDS,
@@ -27,7 +26,11 @@ from rag_access_guard_api.adapters.ollama_response import decode_answer
 from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor
 from rag_access_guard_api.config import INFERENCE_RECOVERY_SECONDS
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
-from rag_access_guard_api.services.model_manifest import ModelManifest
+from rag_access_guard_api.services.model_profiles import (
+    GenerationManifest,
+    ModelProfile,
+    profile_for_manifest,
+)
 
 MAX_INPUT_BYTES: Final = 16384
 MAX_INPUT_TOKENS: Final = 1024
@@ -42,7 +45,7 @@ class OllamaAdapter:
         client: httpx2.AsyncClient | None = None,
         *,
         base_url: str = "http://127.0.0.1:11434",
-        manifest: ModelManifest | None = None,
+        manifest: GenerationManifest | None = None,
         runtime: InferenceRuntime | None = None,
         supervisor: OllamaSupervisor | None = None,
     ) -> None:
@@ -53,10 +56,11 @@ class OllamaAdapter:
         self._supervisor: OllamaSupervisor | None = (
             self._runtime.own_supervisor(supervisor) if supervisor is not None else None
         )
-        self.manifest: ModelManifest = manifest or ModelManifest()
         self.counter: ModelTokenCounter = (
             get_model_counter() if manifest is None else ModelTokenCounter(manifest)
         )
+        self.manifest: GenerationManifest = self.counter.manifest
+        self.profile: ModelProfile = profile_for_manifest(self.manifest)
 
     async def generate(self, *, user_input: str, system_supplied_context: str) -> str:
         """Return a complete, unreleased plain-text answer."""
@@ -122,15 +126,14 @@ class OllamaAdapter:
                         "stream": False,
                         "messages": [
                             {"role": message["role"], "content": message["content"]}
-                            for message in build_messages(
+                            for message in self.profile.messages(
                                 user_input=user_input,
                                 system_supplied_context=system_supplied_context,
                             )
                         ],
-                        "options": {
-                            "num_ctx": self.manifest.context_window,
-                            "num_predict": self.manifest.max_output_tokens,
-                        },
+                        "options": TypeAdapter[JsonValue](JsonValue).validate_python(
+                            self.profile.options()
+                        ),
                     },
                 )
                 answer = decode_answer(raw)

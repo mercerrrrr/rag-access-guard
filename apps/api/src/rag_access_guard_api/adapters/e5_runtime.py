@@ -1,18 +1,20 @@
 """Verified safetensors loading and mask-aware E5 inference on CPU."""
 
 from functools import cache
-from hashlib import file_digest
 from pathlib import Path
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 import torch
 from torch import Tensor
 from transformers import BertModel
 
-from rag_access_guard_api.adapters.tokenizer import E5TokenCounter
+from rag_access_guard_api.adapters.e5_artifacts import verify_e5_artifacts
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError, validate_vectors
 
 INPUT_LIMIT: Final = 512
+
+if TYPE_CHECKING:
+    from rag_access_guard_api.adapters.tokenizer import E5TokenCounter
 
 
 def average_pool(hidden: Tensor, mask: Tensor) -> Tensor:
@@ -25,18 +27,7 @@ class E5Runtime:
 
     def __init__(self, path: Path) -> None:
         """Read only pinned local artifacts, never pickle or remote executable code."""
-        artifacts = (
-            ("config.json", "69137736cab8b8903a07fe8afaafdda25aac55415a12a55d1bffa9f581abf959"),
-            (
-                "model.safetensors",
-                "1a55775f53449dac10a2bcbc312469fac40b96d53198c407081a831f81c98477",
-            ),
-        )
-        for name, expected in artifacts:
-            with (path / name).open("rb") as source:
-                if file_digest(source, "sha256").hexdigest() != expected:
-                    raise EmbeddingError
-        self.tokenizer: E5TokenCounter = E5TokenCounter(path / "tokenizer.json")
+        self.tokenizer: E5TokenCounter = verify_e5_artifacts(path)
         torch.set_num_threads(2)
         self.model: BertModel = BertModel.from_pretrained(
             str(path), local_files_only=True, use_safetensors=True, attn_implementation="eager"

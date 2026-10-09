@@ -73,6 +73,7 @@ class InferenceRuntime:
         )
         self._closed: bool = False
         self._generation_unavailable: bool = False
+        self._model_available: bool = True
         self._generation_principal: UUID | None = None
         self._embedding_busy: bool = False
         self._cancel_pending: Callable[[], bool] | None = None
@@ -108,6 +109,9 @@ class InferenceRuntime:
             if self._generation_principal is not None:
                 self.pre_admission_rejections += 1
                 raise InferenceBusyError
+            if not self._model_available:
+                self.pre_admission_rejections += 1
+                raise InferenceUnavailableError
             self._generation_principal = principal_id
         return GenerationPermit(self)
 
@@ -120,6 +124,29 @@ class InferenceRuntime:
         """Quarantine unknown upstream work until owned exit and profile recheck."""
         with self._lock:
             self._generation_unavailable = not available
+
+    @property
+    def generation_quarantined(self) -> bool:
+        """Keep physical uncertainty distinct from recoverable offline metadata."""
+        with self._lock:
+            return self._closed or self._generation_unavailable
+
+    @property
+    def generation_busy(self) -> bool:
+        """Read accepted admission independently of cached model readiness."""
+        with self._lock:
+            return self._generation_principal is not None
+
+    @property
+    def model_available(self) -> bool:
+        """Read the last verified model readiness independently of physical work."""
+        with self._lock:
+            return self._model_available
+
+    def set_model_available(self, *, available: bool) -> None:
+        """Update metadata readiness without changing physical quarantine."""
+        with self._lock:
+            self._model_available = available
 
     async def run_embedding[T](self, call: Callable[[], T]) -> T:
         """Cancel the waiter promptly, retaining capacity until actual Future completion."""
@@ -167,6 +194,8 @@ class InferenceRuntime:
                     if self._closed or self._generation_unavailable
                     else "busy"
                     if self._generation_principal is not None
+                    else "unavailable"
+                    if not self._model_available
                     else "ready"
                 ),
                 embeddings=(

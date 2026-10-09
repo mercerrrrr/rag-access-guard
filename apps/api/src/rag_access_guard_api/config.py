@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
+    model_profile: Literal["qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1"] = (
+        "qwen3-thinking-legacy-v1"
+    )
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_supervisor_config_path: Path | None = None
     generation_timeout_seconds: int = Field(default=GENERATION_TIMEOUT_SECONDS, gt=0, le=60)
