@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 
 from rag_access_guard_api.adapters import llm
+from rag_access_guard_api.adapters.inference_runtime import InferenceUnavailableError
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.routes.auth import AuthCookies, check_origin
 from rag_access_guard_api.schemas.chat import (
@@ -84,7 +85,7 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
         except QueryTooLongError:
             raise
         except (llm.LLMUnavailableError, SearchError):
-            raise HTTPException(503, "Service unavailable") from None
+            raise InferenceUnavailableError from None
         match result:
             case ChatConflict(reason=reason):
                 raise HTTPException(409, reason)

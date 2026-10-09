@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from rag_access_guard_api.config import Settings
 
 
-@pytest.mark.parametrize("lease", [119, 120])
+@pytest.mark.parametrize("lease", [119, 120, 139, 140])
 def test_startup_rejects_lease_not_exceeding_both_attempts(
     monkeypatch: pytest.MonkeyPatch, lease: int
 ) -> None:
@@ -28,7 +28,7 @@ def test_default_budget_and_shorter_operator_budget(monkeypatch: pytest.MonkeyPa
     assert settings.generation_timeout_seconds == 60
     assert settings.pending_lease_seconds == 180
     monkeypatch.setenv("RAG_ACCESS_GUARD_GENERATION_TIMEOUT_SECONDS", "10")
-    monkeypatch.setenv("RAG_ACCESS_GUARD_PENDING_LEASE_SECONDS", "21")
+    monkeypatch.setenv("RAG_ACCESS_GUARD_PENDING_LEASE_SECONDS", "41")
     shortened = Settings()
     assert shortened.generation_timeout_seconds == 10
-    assert shortened.pending_lease_seconds == 21
+    assert shortened.pending_lease_seconds == 41

@@ -5,10 +5,15 @@ from dataclasses import dataclass
 from typing import Protocol, assert_never
 
 from rag_access_guard import TokenCounter
+from rag_access_guard_api.adapters.inference_runtime import (
+    InferenceUnavailableError,
+    current_runtime,
+)
 from rag_access_guard_api.adapters.model_tokens import get_model_counter
 from rag_access_guard_api.adapters.ollama import OllamaAdapter
 from rag_access_guard_api.adapters.ollama_http import create_client
 from rag_access_guard_api.adapters.ollama_identity import verify_model
+from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor, load_supervisor_config
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.generation import GenerationUnavailable
 from rag_access_guard_api.services.model_manifest import ModelManifest
@@ -56,7 +61,15 @@ def get_llm_adapter() -> LLMAdapter:
         case "fake":
             return FakeLLMAdapter()
         case "ollama":
-            return OllamaAdapter(base_url=settings.ollama_base_url)
+            supervisor: OllamaSupervisor | None = None
+            if settings.ollama_supervisor_config_path is not None:
+                config = load_supervisor_config(settings.ollama_supervisor_config_path)
+                if config.host != settings.ollama_base_url:
+                    raise InferenceUnavailableError
+                supervisor = OllamaSupervisor(config)
+            return OllamaAdapter(
+                base_url=settings.ollama_base_url, runtime=current_runtime(), supervisor=supervisor
+            )
         case "disabled":
             raise LLMUnavailableError
         case _:
@@ -80,6 +93,11 @@ def get_token_counter() -> TokenCounter | None:
 async def initialize_llm(settings: Settings) -> None:
     """Real generation requires a verified local tokenizer and model at startup."""
     if settings.llm_adapter == "ollama":
+        if settings.ollama_supervisor_config_path is not None:
+            config = load_supervisor_config(settings.ollama_supervisor_config_path)
+            supervisor = current_runtime().own_supervisor(OllamaSupervisor(config))
+            if config.host != settings.ollama_base_url or supervisor.status() != "ready":
+                raise InferenceUnavailableError
         _ = get_model_counter()
         async with create_client(settings.ollama_base_url) as client:
             await verify_model(client, ModelManifest())

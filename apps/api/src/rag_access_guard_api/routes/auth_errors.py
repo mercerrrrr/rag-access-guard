@@ -10,6 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from rag_access_guard_api.adapters.inference_runtime import (
+    InferenceBusyError,
+    InferenceUnavailableError,
+)
 from rag_access_guard_api.schemas.embedding_vectors import (
     EmbeddingError,
     VersionActivationConflictError,
@@ -86,6 +90,18 @@ async def _query_too_long(_request: Request, _: QueryTooLongError) -> JSONRespon
     return JSONResponse(status_code=422, content={"detail": {"code": "query_too_long"}})
 
 
+async def _inference_busy(_request: Request, _: InferenceBusyError) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": {"code": "inference_busy"}},
+        headers={"Retry-After": "2"},
+    )
+
+
+async def _inference_unavailable(_request: Request, _: InferenceUnavailableError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": {"code": "inference_unavailable"}})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
@@ -100,6 +116,8 @@ def register_auth_errors(app: FastAPI) -> None:
 
     _ = app.exception_handler(ThreadNotFound)(_thread_not_found)
     _ = app.exception_handler(QueryTooLongError)(_query_too_long)
+    _ = app.exception_handler(InferenceBusyError)(_inference_busy)
+    _ = app.exception_handler(InferenceUnavailableError)(_inference_unavailable)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:

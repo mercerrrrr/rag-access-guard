@@ -1,4 +1,4 @@
-export type ApiErrorCode = "query_too_long";
+export type ApiErrorCode = "query_too_long" | "inference_busy" | "inference_unavailable";
 
 export class ApiError extends Error {
   override readonly name = "ApiError";
@@ -15,6 +15,12 @@ export class ApiError extends Error {
 }
 
 export function errorMessage(error: ApiError): string {
+  if (error.status === 429 && error.code === "inference_busy") {
+    return "Помощник сейчас занят. Повторите запрос немного позже.";
+  }
+  if (error.status === 503 && error.code === "inference_unavailable") {
+    return "Помощник сейчас недоступен. Повторите запрос позже.";
+  }
   if (error.status === 422 && error.code === "query_too_long") {
     return "Вопрос слишком длинный. Сократите его и попробуйте ещё раз.";
   }

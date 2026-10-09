@@ -11,6 +11,12 @@ from anyio.to_thread import run_sync
 from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
 from rag_access_guard.context import matches_history
 from rag_access_guard_api.adapters import embeddings, llm
+from rag_access_guard_api.adapters.inference_runtime import (
+    InferenceBusyError,
+    InferenceRuntime,
+    InferenceUnavailableError,
+    current_runtime,
+)
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.config import (
     GENERATION_MAX_ATTEMPTS,
@@ -61,6 +67,7 @@ class ChatService:
     csrf_token: str = field(repr=False)
     generation_timeout_seconds: int = GENERATION_TIMEOUT_SECONDS
     pending_lease_seconds: int = PENDING_LEASE_SECONDS
+    runtime: InferenceRuntime = field(default_factory=current_runtime, repr=False, compare=False)
 
     async def generate_turn(
         self,
@@ -70,6 +77,7 @@ class ChatService:
     ) -> MessageResponse | ChatConflict:
         """Reserve, prepare, generate, reauthorize and commit before returning."""
         async with self.policy.protected_read(session_token) as uow:
+            principal_id = uow.principal.principal_id
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
             resolved = await resolve_request(uow, thread_id, request, session_token=session_token)
@@ -79,6 +87,12 @@ class ChatService:
         if counter is None:
             raise llm.LLMUnavailableError
         await run_sync(partial(validate_query, request.user_input, model_counter=counter))
+        async with self.runtime.try_acquire_generation(principal_id):
+            return await self._reserve_and_generate(session_token, thread_id, request)
+
+    async def _reserve_and_generate(
+        self, session_token: str, thread_id: UUID, request: MessageRequest
+    ) -> MessageResponse | ChatConflict:
         async with self.policy.protected_read(session_token) as uow:
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
@@ -167,7 +181,14 @@ class ChatService:
                         return await self._infer(session_token, attempt, user_input, counter)
                     case _:
                         assert_never(prepared)
-        except (llm.LLMUnavailableError, EmbeddingError, SearchError, TimeoutError):
+        except (
+            llm.LLMUnavailableError,
+            EmbeddingError,
+            SearchError,
+            TimeoutError,
+            InferenceBusyError,
+            InferenceUnavailableError,
+        ):
             return Neutral(reservation, "generation_unavailable")
 
     async def _infer(

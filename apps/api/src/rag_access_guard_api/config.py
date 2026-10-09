@@ -17,6 +17,7 @@ DATABASE_POOL_SIZE: Final = 5
 DATABASE_TIMEOUT_SECONDS: Final = 2
 GENERATION_MAX_ATTEMPTS: Final = 2
 GENERATION_TIMEOUT_SECONDS: Final = 60
+INFERENCE_RECOVERY_SECONDS: Final = 20
 PENDING_LEASE_SECONDS: Final = 180
 
 
@@ -38,13 +39,16 @@ class Settings(BaseSettings):
     retrieval_config_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
     ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_supervisor_config_path: Path | None = None
     generation_timeout_seconds: int = Field(default=GENERATION_TIMEOUT_SECONDS, gt=0, le=60)
     pending_lease_seconds: int = Field(default=PENDING_LEASE_SECONDS, gt=0)
 
     @model_validator(mode="after")
     def validate_generation_budget(self) -> Self:
         """Keep both bounded attempts within the non-renewable request lease."""
-        if self.pending_lease_seconds <= GENERATION_MAX_ATTEMPTS * self.generation_timeout_seconds:
+        if self.pending_lease_seconds <= (
+            GENERATION_MAX_ATTEMPTS * self.generation_timeout_seconds + INFERENCE_RECOVERY_SECONDS
+        ):
             message = "Lease must exceed both generation attempts"
             raise ValueError(message)
         return self

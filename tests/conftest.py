@@ -1,8 +1,12 @@
 import os
 import secrets
+from collections.abc import Generator
 from typing import Final
 
+import anyio
 import pytest
+
+from rag_access_guard_api.adapters.inference_runtime import InferenceRuntime, bind_runtime
 
 _TEST_LIMIT_SECRET: Final = secrets.token_hex(32)
 pytest_plugins = (
@@ -25,3 +29,11 @@ pytest_configure()
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def standalone_inference_scope() -> Generator[None]:
+    runtime = InferenceRuntime()
+    with bind_runtime(runtime):
+        yield
+    anyio.run(runtime.aclose)

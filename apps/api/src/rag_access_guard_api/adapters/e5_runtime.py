@@ -21,7 +21,7 @@ def average_pool(hidden: Tensor, mask: Tensor) -> Tensor:
 
 
 class E5Runtime:
-    """Own one verified, evaluation-only model; its caller serializes CPU work."""
+    """Own one verified model; application Future admission bounds physical CPU work."""
 
     def __init__(self, path: Path) -> None:
         """Read only pinned local artifacts, never pickle or remote executable code."""

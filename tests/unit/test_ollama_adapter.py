@@ -230,7 +230,7 @@ async def test_transport_errors_are_neutral_without_retries(
 
 
 @pytest.mark.anyio
-async def test_whole_call_timeout_cancels_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_whole_call_timeout_cancels_http_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     async def respond(_request: httpx2.Request) -> httpx2.Response:
         await anyio.sleep_forever()
         raise AssertionError

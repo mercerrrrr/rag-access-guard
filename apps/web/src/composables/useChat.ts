@@ -107,6 +107,9 @@ export function createChatState(api: ChatApi, session: SessionState) {
         if (epoch === refreshEpoch && currentId === threadId && !message.value) {
           message.value = "Запрос уже выполняется или диалог изменился. Данные обновлены; автоматического повтора нет.";
         }
+      } else if (result.error.code === "inference_busy" || result.error.code === "inference_unavailable") {
+        retryRequest.value = null;
+        message.value = errorMessage(result.error);
       } else if (result.error.status === 422) {
         retryRequest.value = null;
         message.value = result.error.code === "query_too_long" ? errorMessage(result.error)

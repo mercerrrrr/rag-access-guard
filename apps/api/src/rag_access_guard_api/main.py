@@ -1,13 +1,15 @@
 """FastAPI application and health contracts."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from typing import ClassVar, Final, Literal
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
+from rag_access_guard_api.adapters.inference_runtime import InferenceRuntime, bind_runtime
 from rag_access_guard_api.adapters.llm import initialize_llm
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine, is_database_ready
@@ -35,22 +37,47 @@ class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
 
 
+class InferenceScopeMiddleware:
+    """Bind request inference without wrapping streaming receive exceptions."""
+
+    def __init__(self, app: ASGIApp, get_runtime: Callable[[], InferenceRuntime | None]) -> None:
+        """Resolve the lifespan-owned runtime when each request begins."""
+        self._app: ASGIApp = app
+        self._get_runtime: Callable[[], InferenceRuntime | None] = get_runtime
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Keep binding active through the original ASGI receive/send lifetime."""
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        with bind_runtime(self._get_runtime()):
+            await self._app(scope, receive, send)
+
+
 def create_app() -> FastAPI:
     """Create the FastAPI application."""
     settings = Settings()
     engine = create_database_engine(settings)
     auth = AuthService(engine, settings)
+    runtime: InferenceRuntime | None = None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        nonlocal runtime
+        runtime = InferenceRuntime()
         try:
-            await auth.initialize()
-            await initialize_llm(settings)
-            yield
+            with bind_runtime(runtime):
+                await auth.initialize()
+                await initialize_llm(settings)
+                yield
         finally:
+            await runtime.aclose()
+            runtime = None
             await engine.dispose()
 
     application = FastAPI(title="RAG Access Guard API", lifespan=lifespan)
+
+    application.add_middleware(InferenceScopeMiddleware, get_runtime=lambda: runtime)
 
     application.include_router(build_auth_router(auth, settings))
     application.include_router(build_chat_router(PolicyUnitOfWork(engine), settings))

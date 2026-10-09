@@ -204,3 +204,18 @@ it("query_too_long_displays_closed_message_without_reserving_local_retry", async
   expect(state.thread.value?.turns).toEqual([]);
   expect(state.sending.value).toBe(false);
 });
+
+it("busy_chat_displays_controlled_feedback_without_auto_retry", async () => {
+  const session = createSessionState(sessionApi());
+  await session.refresh();
+  let calls = 0;
+  const state = createChatState(chatApi({
+    send: () => { calls += 1; return Promise.reject(new ApiError(429, 2, "inference_busy")); },
+  }), session);
+  await state.loadThread(thread.id);
+  await state.sendQuestion("Вопрос");
+  expect(state.message.value).toBe("Помощник сейчас занят. Повторите запрос немного позже.");
+  expect(state.retryRequest.value).toBeNull();
+  expect(state.thread.value?.turns).toEqual([]);
+  expect(calls).toBe(1);
+});

@@ -65,7 +65,7 @@ def test_new_request_with_unavailable_counter_does_not_reserve(
         headers=ChatHttp.csrf(chat_case.client),
     )
     assert response.status_code == 503
-    assert response.json() == {"detail": "Service unavailable"}
+    assert response.json() == {"detail": {"code": "inference_unavailable"}}
     assert chat_case.model.call_count == 0
     detail = chat_case.read()
     assert detail.revision == 0
@@ -186,15 +186,16 @@ def test_two_validated_requests_can_reserve_only_one_pending(
             done, pending = wait(responses, timeout=10, return_when=FIRST_COMPLETED)
             assert len(done) == len(pending) == 1
             loser = next(iter(done)).result()
-            assert loser.status_code == 409
-            assert loser.json() == {"detail": "request_in_progress"}
+            assert loser.status_code == 429
+            assert loser.json() == {"detail": {"code": "inference_busy"}}
+            assert loser.headers["retry-after"] == "2"
             with chat_case.database.connect() as connection:
                 states = connection.execute(text("SELECT state FROM chat_turns")).scalars().all()
             assert states == ["pending"]
         finally:
             allow_reservation.set()
             chat_case.model.resume.set()
-        assert sorted(response.result(10).status_code for response in responses) == [200, 409]
+        assert sorted(response.result(10).status_code for response in responses) == [200, 429]
     assert chat_case.model.call_count == 1
     detail = chat_case.read()
     assert detail.revision == 1

@@ -6,6 +6,30 @@ import { csrfSchema, sessionSchema } from "@/api/types";
 
 afterEach(() => vi.unstubAllGlobals());
 
+it.each([
+  { status: 429, code: "inference_busy" },
+  { status: 503, code: "inference_unavailable" },
+])("recognizes_closed_inference_error_without_retry", async ({ status, code }) => {
+  let calls = 0;
+  vi.stubGlobal("fetch", () => {
+    calls += 1;
+    return Promise.resolve(Response.json({ detail: { code } }, { status, headers: { "Retry-After": "2" } }));
+  });
+  await expect(requestJson("/api/chat/threads", { method: "POST", body: {}, csrfToken: "csrf", parse: (value) => csrfSchema.parse(value) }))
+    .rejects.toMatchObject({ status, code, message: "Request failed" });
+  expect(calls).toBe(1);
+});
+
+it.each([
+  { status: 429, body: { detail: { code: "inference_busy", path: "private" } } },
+  { status: 503, body: { detail: { code: "inference_unavailable" }, pid: 123 } },
+  { status: 503, body: { detail: { code: "inference_busy" } } },
+])("rejects_extra_fields_or_mismatched_inference_status", async ({ status, body }) => {
+  vi.stubGlobal("fetch", () => Promise.resolve(Response.json(body, { status })));
+  await expect(requestJson("/api/chat/threads", { parse: (value) => csrfSchema.parse(value) }))
+    .rejects.toMatchObject({ status, code: null, message: "Request failed" });
+});
+
 it("sends_same_origin_cookie_csrf_and_json_without_retry", async () => {
   let sent: Request | undefined;
   vi.stubGlobal("fetch", (request: Request) => {

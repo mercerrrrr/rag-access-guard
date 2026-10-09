@@ -2,9 +2,10 @@ import ky from "ky";
 import { z } from "zod";
 
 import { ApiError } from "@/api/errors";
+import type { ApiErrorCode } from "@/api/errors";
 
 const queryErrorSchema = z.strictObject({
-  detail: z.strictObject({ code: z.literal("query_too_long") }),
+  detail: z.strictObject({ code: z.enum(["query_too_long", "inference_busy", "inference_unavailable"]) }),
 });
 
 export type JsonRequest<T> = {
@@ -37,12 +38,17 @@ export async function requestJson<T>(path: string, options: JsonRequest<T>): Pro
     if (!response.ok) {
       const raw = response.headers.get("Retry-After");
       const seconds = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
-      let code: "query_too_long" | null = null;
-      if (response.status === 422) {
+      let code: ApiErrorCode | null = null;
+      if ([422, 429, 503].includes(response.status)) {
         try {
           const body: unknown = await response.json();
           const parsed = queryErrorSchema.safeParse(body);
-          if (parsed.success) code = parsed.data.detail.code;
+          if (parsed.success) {
+            const candidate = parsed.data.detail.code;
+            if ((response.status === 422 && candidate === "query_too_long")
+              || (response.status === 429 && candidate === "inference_busy")
+              || (response.status === 503 && candidate === "inference_unavailable")) code = candidate;
+          }
         } catch (error) {
           if (!(error instanceof SyntaxError)) throw error;
         }
