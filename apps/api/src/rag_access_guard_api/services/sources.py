@@ -13,6 +13,7 @@ from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.persistence import Document, DocumentChunk, DocumentVersion
 from rag_access_guard_api.schemas.ingestion import IngestionManifest
 from rag_access_guard_api.schemas.sources import OriginalContent, SourceContent, SourceNotFound
+from rag_access_guard_api.services.origin import read_version_origin
 from rag_access_guard_api.services.security import ReadUoW
 from rag_access_guard_api.services.text_documents import MAX_TEXT_BYTES
 
@@ -59,6 +60,7 @@ async def read_source(uow: ReadUoW, source_ref: SourceRef) -> SourceContent:
         chunk_id=source_ref.chunk_id,
         title=row[0],
         text=row[1],
+        origin=await read_version_origin(uow.connection, source_ref.document_version_id),
     )
 
 

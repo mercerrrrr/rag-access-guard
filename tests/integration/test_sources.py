@@ -18,6 +18,7 @@ def test_source_url_is_denied_after_grant_revocation(chat_case: ChatCase) -> Non
         "chunk_id": str(source.chunk_id),
         "title": "Synthetic",
         "text": "PROTECTED_SYNTHETIC",
+        "origin": None,
     }
     assert response.headers["cache-control"] == "private, no-store"
     assert response.headers["vary"] == "Cookie"

@@ -10,6 +10,7 @@ def test_access_schema_starts_without_accounts_or_grants(schema_connection: Conn
         "user_roles",
         "documents",
         "document_versions",
+        "document_origins",
         "document_chunks",
         "chunk_embeddings",
         "document_grants",
@@ -24,6 +25,9 @@ def test_access_schema_starts_without_accounts_or_grants(schema_connection: Conn
     assert schema_connection.execute(text("SELECT id, revision FROM policy_state")).one() == (1, 0)
     assert schema_connection.execute(text("SELECT count(*) FROM users")).scalar_one() == 0
     assert schema_connection.execute(text("SELECT count(*) FROM document_grants")).scalar_one() == 0
+    assert (
+        schema_connection.execute(text("SELECT count(*) FROM document_origins")).scalar_one() == 0
+    )
 
 
 def test_audit_storage_cannot_accept_content(schema_connection: Connection) -> None:

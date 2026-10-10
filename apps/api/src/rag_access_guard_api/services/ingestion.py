@@ -23,8 +23,10 @@ from rag_access_guard_api.persistence import (
 from rag_access_guard_api.schemas.documents import DocumentVersionSummary
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError, validate_vectors
 from rag_access_guard_api.schemas.ingestion import IngestionManifest, ParsedDocument, UploadPayload
+from rag_access_guard_api.schemas.origin import DocumentOrigin
 from rag_access_guard_api.services.audit import AuditRecord
 from rag_access_guard_api.services.chunking import CHUNKER_REVISION, ChunkDraft, chunk_text
+from rag_access_guard_api.services.origin import store_origin
 from rag_access_guard_api.services.security import MutationUoW
 from rag_access_guard_api.services.text_documents import DocumentError
 
@@ -38,6 +40,7 @@ class PreparedUpload:
     manifest: IngestionManifest
     chunks: tuple[ChunkDraft, ...]
     vectors: tuple[tuple[float, ...], ...] | None = None
+    origin: DocumentOrigin | None = None
 
 
 def prepare_upload(upload: UploadPayload) -> PreparedUpload:
@@ -123,6 +126,8 @@ async def store_version(
         .one()
     )
     version = DocumentVersionSummary.model_validate(row)
+    if prepared.origin is not None:
+        await store_origin(uow.connection, version.id, prepared.origin)
     if not prepared.chunks:
         raise DocumentError(422, "parse_failed")
     for chunk in prepared.chunks:

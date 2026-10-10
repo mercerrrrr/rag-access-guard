@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from rag_access_guard_api.schemas.origin import DocumentOrigin
+
 
 class SourceContent(BaseModel):
     """No storage paths or model-supplied metadata cross this boundary."""
@@ -16,6 +18,7 @@ class SourceContent(BaseModel):
     chunk_id: UUID
     title: str
     text: str
+    origin: DocumentOrigin | None = None
 
 
 class SourceNotFound(Exception):  # noqa: N818 -- public phase contract.

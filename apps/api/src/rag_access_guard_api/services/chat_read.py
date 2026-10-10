@@ -20,6 +20,7 @@ from rag_access_guard_api.schemas.chat import (
 from rag_access_guard_api.services.chat_repository import get_owned_thread
 from rag_access_guard_api.services.chat_state import StoredTurn, neutral_view
 from rag_access_guard_api.services.chat_turns import load_turns
+from rag_access_guard_api.services.origin import read_version_origin
 from rag_access_guard_api.services.security import ReadUoW, database_clock, revalidate_session
 from rag_access_guard_api.services.source_closure import closure_matches
 from rag_access_guard_api.services.sources import build_source_url
@@ -136,4 +137,5 @@ async def _source(uow: ReadUoW, ref: SourceRef) -> SourceView:
         chunk_id=ref.chunk_id,
         title=title,
         url=build_source_url(ref),
+        origin=await read_version_origin(uow.connection, ref.document_version_id),
     )

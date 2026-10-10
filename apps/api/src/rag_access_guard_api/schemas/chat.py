@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from rag_access_guard_api.schemas.origin import DocumentOrigin
+
 MAX_INPUT_BYTES: Final = 16384
 MAX_INPUT_TOKENS: Final = 1024
 
@@ -35,6 +37,7 @@ class SourceView(BaseModel):
     chunk_id: UUID
     title: str
     url: str
+    origin: DocumentOrigin | None = None
 
 
 class TurnIdentity(BaseModel):

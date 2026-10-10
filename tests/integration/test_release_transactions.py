@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from rag_access_guard_api.schemas.auth import CsrfResponse
 from rag_access_guard_api.schemas.chat import MessageRequest
-from rag_access_guard_api.services import chat
+from rag_access_guard_api.services import chat_completion
 from rag_access_guard_api.services.chat_state import NeutralReason, StoredTurn
 from rag_access_guard_api.services.chat_turns import ReleasedAnswer, complete_turn
 from rag_access_guard_api.services.security import ReadUoW
@@ -89,7 +89,7 @@ def test_commit_failure_never_returns_or_persists_answer(
             message = "PRIVATE_COMMIT_DETAIL"
             raise SQLAlchemyError(message)
 
-    monkeypatch.setattr(chat, "complete_turn", mark_release)
+    monkeypatch.setattr(chat_completion, "complete_turn", mark_release)
     event.listen(Engine, "commit", fail_commit)
     try:
         response = chat_case.client.post(

@@ -8,6 +8,10 @@ from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.services.chat_repository import load_prior_turns
 from rag_access_guard_api.services.chat_state import GenerationAttempt, NeutralReason, Reservation
 from rag_access_guard_api.services.chat_turns import ReleasedAnswer
+from rag_access_guard_api.services.origin_context import (
+    MAX_CONTEXT_TOKENS,
+    origin_binding_matches,
+)
 from rag_access_guard_api.services.security import ReadUoW
 
 
@@ -40,8 +44,12 @@ async def release_result(
     if isinstance(outcome, Neutral):
         return outcome.reason
     generated = outcome.attempt
+    if not 0 < generated.context_budget <= MAX_CONTEXT_TOKENS:
+        return "policy_changed"
     canonical_history = await load_prior_turns(uow, generated.thread_id)
-    release = await Guard(outcome.counter).authorize_release(
+    release = await Guard(
+        outcome.counter, max_context_tokens=generated.context_budget
+    ).authorize_release(
         generated.principal_id,
         generated.thread_id,
         generated.prepared,
@@ -49,6 +57,15 @@ async def release_result(
     )
     if not release.allowed and release.reason == "stale_revision":
         return StaleGeneration()
-    if release.allowed and matches_history(generated.prepared, canonical_history):
+    if (
+        release.allowed
+        and matches_history(generated.prepared, canonical_history)
+        and await origin_binding_matches(
+            uow,
+            generated.prepared,
+            origin_binding=generated.origin_binding,
+            model_context=generated.model_context,
+        )
+    ):
         return ReleasedAnswer(outcome.body, generated.prepared.source_refs)
     return "policy_changed"

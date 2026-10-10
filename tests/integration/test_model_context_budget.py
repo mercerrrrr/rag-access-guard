@@ -158,14 +158,22 @@ async def test_full_request_overflow_is_neutral_without_model_transport(
         transport=httpx2.MockTransport(respond),
         base_url="http://127.0.0.1:11434",
     ) as client:
-        adapter = OllamaAdapter(client, manifest=ModelManifest(context_window=2048))
+        manifest = ModelManifest(context_window=2048, max_output_tokens=1024)
+        adapter = OllamaAdapter(client, manifest=manifest)
+        question = "🧬" * 512
+        assert adapter.counter.count(question) == 1024
+        assert (
+            adapter.counter.count_request(user_input=question, system_supplied_context="")
+            + manifest.max_output_tokens
+            > manifest.context_window
+        )
         monkeypatch.setattr(llm, "get_llm_adapter", lambda: adapter)
         monkeypatch.setattr(llm, "get_token_counter", lambda: adapter.counter)
         result = chat_case.send(
             MessageRequest(
                 request_id=uuid4(),
                 expected_thread_revision=1,
-                user_input="SECOND",
+                user_input=question,
             )
         )
     assert result.turn.state == "neutral"

@@ -58,6 +58,9 @@ class GenerationAttempt(Reservation):
     """The exact prepared context belongs to one session, thread and reservation."""
 
     prepared: PreparedContext
+    origin_binding: str | None = None
+    model_context: str | None = None
+    context_budget: int = 5000
 
 
 def request_hash(request: MessageRequest) -> bytes:

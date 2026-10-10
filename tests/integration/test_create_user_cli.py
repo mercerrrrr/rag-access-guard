@@ -16,7 +16,7 @@ SUBPROCESS_CREATION_FLAGS: Final = subprocess.CREATE_NO_WINDOW if sys.platform =
 ANSI_CONTROL_SEQUENCE: Final[re.Pattern[str]] = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 CONTROLLED_STDIN_BOOTSTRAP: Final = (
     "import io, os, runpy, sys; "
-    "sys.stdin = io.TextIOWrapper(os.fdopen(0, 'rb', closefd=False)); "
+    "sys.stdin = io.TextIOWrapper(os.fdopen(0, 'rb', closefd=False), encoding='utf-8'); "
     "sys.argv = ['rag-access-guard-create-user', *sys.argv[1:]]; "
     "runpy.run_module('rag_access_guard_api.cli.create_user', run_name='__main__')"
 )
@@ -31,6 +31,7 @@ def run_create_user(
     admin: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
+    environment["PYTHONIOENCODING"] = "utf-8"
     environment["RAG_ACCESS_GUARD_DATABASE_URL"] = database_url
     arguments = [
         sys.executable,
@@ -49,6 +50,7 @@ def run_create_user(
         capture_output=True,
         input=f"{password}\n{password}\n",
         text=True,
+        encoding="utf-8",
         env=environment,
         creationflags=SUBPROCESS_CREATION_FLAGS,
         timeout=15,
@@ -188,6 +190,7 @@ def test_create_user_cli_duplicate_does_not_overwrite(
 def test_create_user_cli_help_needs_no_runtime_configuration() -> None:
     # Given: deliberately invalid runtime configuration.
     environment = os.environ.copy()
+    environment["PYTHONIOENCODING"] = "utf-8"
     _ = environment.pop("RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET", None)
     environment["RAG_ACCESS_GUARD_DATABASE_URL"] = "not-a-database-url"
 
@@ -197,6 +200,7 @@ def test_create_user_cli_help_needs_no_runtime_configuration() -> None:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         env=environment,
         creationflags=SUBPROCESS_CREATION_FLAGS,
         timeout=15,
@@ -213,6 +217,7 @@ def test_create_user_cli_help_needs_no_runtime_configuration() -> None:
 def test_create_user_cli_database_failure_does_not_expose_password() -> None:
     # Given: a valid command targeting a database endpoint that cannot connect.
     environment = os.environ.copy()
+    environment["PYTHONIOENCODING"] = "utf-8"
     environment["RAG_ACCESS_GUARD_DATABASE_URL"] = (
         "postgresql+psycopg://synthetic:synthetic@127.0.0.1:1/unavailable"
     )
@@ -233,6 +238,7 @@ def test_create_user_cli_database_failure_does_not_expose_password() -> None:
         capture_output=True,
         input=f"{password}\n{password}\n",
         text=True,
+        encoding="utf-8",
         env=environment,
         creationflags=SUBPROCESS_CREATION_FLAGS,
         timeout=15,

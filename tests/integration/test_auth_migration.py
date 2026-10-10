@@ -17,7 +17,7 @@ def test_auth_migration_roundtrip(
         with engine.connect() as connection:
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0012_docx_ingestion"
+                == "0013_document_origin"
             )
         command.downgrade(config, "0002_access_control")
         with engine.connect() as connection:

@@ -8,7 +8,7 @@ from uuid import UUID
 import anyio
 from anyio.to_thread import run_sync
 
-from rag_access_guard import Guard, PreparedContext, PrepareDenied, TokenCounter
+from rag_access_guard import Guard, PrepareDenied, TokenCounter
 from rag_access_guard.context import matches_history
 from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.adapters.inference_runtime import (
@@ -26,37 +26,27 @@ from rag_access_guard_api.config import (
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
-from rag_access_guard_api.services.chat_read import read_turn
-from rag_access_guard_api.services.chat_release import (
-    Generated,
-    Neutral,
-    StaleGeneration,
-    release_result,
-)
+from rag_access_guard_api.services import chat_completion
+from rag_access_guard_api.services.chat_completion import ChatCompletion
+from rag_access_guard_api.services.chat_release import Generated, Neutral, StaleGeneration
 from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
 from rag_access_guard_api.services.chat_reservation import active_lease, reserve, resolve_request
-from rag_access_guard_api.services.chat_state import (
-    ChatConflict,
-    GenerationAttempt,
-    NeutralReason,
-    Reservation,
-)
-from rag_access_guard_api.services.chat_turns import ReleasedAnswer, complete_turn, load_turns
+from rag_access_guard_api.services.chat_state import ChatConflict, GenerationAttempt, Reservation
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.origin import InvalidOriginError
+from rag_access_guard_api.services.origin_context import (
+    HostPrepared,
+    origin_binding_matches,
+    prepare_origin_context,
+)
 from rag_access_guard_api.services.query_validation import validate_query
 from rag_access_guard_api.services.retrieval import retrieve
-from rag_access_guard_api.services.security import (
-    PolicyUnitOfWork,
-    database_clock,
-    revalidate_session,
-)
+from rag_access_guard_api.services.security import PolicyUnitOfWork, database_clock
 from rag_access_guard_api.services.tokens import matches_token
 
 MAX_ANSWER_BYTES: Final = 65536
 __all__ = ("ChatService", "Generated", "Neutral", "StaleGeneration")
-
-
-type Completion = MessageResponse | ChatConflict | StaleGeneration
+Completion = chat_completion.Completion
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +125,9 @@ class ChatService:
                 reserved.request_id,
                 reserved.thread_revision,
                 outcome.attempt.prepared,
+                outcome.attempt.origin_binding,
+                outcome.attempt.model_context,
+                outcome.attempt.context_budget,
             )
         return await self._complete(session_token, outcome, expected_attempt=expected)
 
@@ -156,20 +149,24 @@ class ChatService:
                         raise ForbiddenError
                     chunks = await retrieve(uow, vector)
                     history = await load_prior_turns(uow, reservation.thread_id)
-                    prepared = await Guard(counter).prepare_context(
-                        reservation.principal_id,
+                    prepared = await prepare_origin_context(
+                        uow,
                         chunks,
                         history,
-                        PostgresPolicyReader(uow),
+                        counter,
+                        user_input=user_input,
                     )
                 match prepared:
                     case PrepareDenied():
                         return Neutral(reservation, "policy_changed")
-                    case PreparedContext():
-                        if not prepared.source_refs or not matches_history(prepared, history):
+                    case None:
+                        return Neutral(reservation, "no_context")
+                    case HostPrepared():
+                        context = prepared.prepared
+                        if not context.source_refs or not matches_history(context, history):
                             return Neutral(
                                 reservation,
-                                "policy_changed" if prepared.source_refs else "no_context",
+                                "policy_changed" if context.source_refs else "no_context",
                             )
                         attempt = GenerationAttempt(
                             reservation.principal_id,
@@ -177,7 +174,10 @@ class ChatService:
                             reservation.thread_id,
                             reservation.request_id,
                             reservation.thread_revision,
-                            prepared,
+                            context,
+                            prepared.origin_binding,
+                            prepared.model_context,
+                            prepared.context_budget,
                         )
                         return await self._infer(session_token, attempt, user_input, counter)
                     case _:
@@ -189,6 +189,7 @@ class ChatService:
             TimeoutError,
             InferenceBusyError,
             InferenceUnavailableError,
+            InvalidOriginError,
         ):
             return Neutral(reservation, "generation_unavailable")
 
@@ -206,16 +207,19 @@ class ChatService:
             attempt.request_id,
             attempt.thread_revision,
         )
-        if not await self._active(session_token, attempt):
+        if not await self._active(session_token, attempt, counter=counter):
             return Neutral(reservation, "interrupted")
         body = await llm.get_llm_adapter().generate(
-            user_input=user_input, system_supplied_context=attempt.prepared.model_context
+            user_input=user_input,
+            system_supplied_context=attempt.model_context or attempt.prepared.model_context,
         )
         if not body.strip() or "\x00" in body or len(body.encode("utf-8")) > MAX_ANSWER_BYTES:
             return Neutral(reservation, "generation_unavailable")
         return Generated(attempt, body, counter)
 
-    async def _active(self, session_token: str, reservation: Reservation) -> bool:
+    async def _active(
+        self, session_token: str, reservation: GenerationAttempt, *, counter: TokenCounter
+    ) -> bool:
         async with self.policy.protected_read(session_token) as uow:
             if (
                 uow.principal.principal_id != reservation.principal_id
@@ -225,7 +229,21 @@ class ChatService:
                 raise ForbiddenError
             expiry = await active_lease(uow, reservation, session_token=session_token)
             now = await database_clock(uow.connection)
-            return expiry is not None and now < expiry
+            if expiry is None or now >= expiry:
+                return False
+            decision = await Guard(counter).authorize_read(
+                reservation.principal_id,
+                reservation.prepared.source_refs,
+                PostgresPolicyReader(uow),
+            )
+            if not decision.allowed:
+                return False
+            return await origin_binding_matches(
+                uow,
+                reservation.prepared,
+                origin_binding=reservation.origin_binding,
+                model_context=reservation.model_context,
+            )
 
     async def _complete(
         self,
@@ -234,45 +252,6 @@ class ChatService:
         *,
         expected_attempt: Reservation,
     ) -> Completion:
-        attempt = outcome.attempt
-        if attempt != expected_attempt:
-            raise ForbiddenError
-        async with self.policy.protected_read(session_token) as uow:
-            if (
-                uow.principal.principal_id != attempt.principal_id
-                or uow.principal.session_id != attempt.session_id
-                or not matches_token(self.csrf_token, uow.csrf_digest)
-            ):
-                raise ForbiddenError
-            thread = await get_owned_thread(uow, attempt.thread_id, lock=True)
-            await revalidate_session(uow, session_token)
-            turns = await load_turns(uow, thread.id)
-            turn = next((t for t in turns if t.request_id == attempt.request_id), None)
-            if turn is None or turn.expected_thread_revision != attempt.thread_revision:
-                return ChatConflict("request_conflict")
-            if turn.state != "pending":
-                return MessageResponse(
-                    thread_revision=thread.revision, turn=await read_turn(uow, turn), replayed=True
-                )
-            if thread.revision != attempt.thread_revision:
-                return ChatConflict("thread_conflict")
-            now = await database_clock(uow.connection)
-            result: ReleasedAnswer | NeutralReason | StaleGeneration = "interrupted"
-            if turn.lease_expires_at is not None and now < turn.lease_expires_at:
-                result = await release_result(uow, outcome)
-            await revalidate_session(uow, session_token)
-            if (
-                turn.lease_expires_at is None
-                or await database_clock(uow.connection) >= turn.lease_expires_at
-            ):
-                result = "interrupted"
-            response: Completion
-            if isinstance(result, StaleGeneration):
-                response = result
-            else:
-                revision = await complete_turn(uow, turn, result)
-                completed = next(t for t in await load_turns(uow, thread.id) if t.id == turn.id)
-                response = MessageResponse(
-                    thread_revision=revision, turn=await read_turn(uow, completed), replayed=False
-                )
-        return response
+        return await ChatCompletion(self.policy, self.csrf_token).complete(
+            session_token, outcome, expected_attempt=expected_attempt
+        )

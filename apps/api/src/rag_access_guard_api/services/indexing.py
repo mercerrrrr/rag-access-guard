@@ -26,6 +26,7 @@ from rag_access_guard_api.schemas.embedding_vectors import (
 from rag_access_guard_api.schemas.ingestion import UploadPayload
 from rag_access_guard_api.services import ingestion
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.origin import read_version_origin
 from rag_access_guard_api.services.security import MutationUoW, PolicyUnitOfWork, ReadUoW
 from rag_access_guard_api.services.text_documents import DocumentError
 from rag_access_guard_api.services.tokens import matches_token
@@ -195,7 +196,9 @@ async def index_document_version(  # noqa: PLR0913
         filename = f"source.{extension}"
         upload = UploadPayload(filename=filename, media_type=row[1], data=row[0])
         expected = row[2]
+        origin = await read_version_origin(uow.connection, version_id)
     prepared = await prepare_index(upload, embedder)
+    prepared = replace(prepared, origin=origin)
     return await _publish_index(
         policy,
         session_token,

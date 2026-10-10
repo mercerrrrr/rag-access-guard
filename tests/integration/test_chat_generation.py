@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from rag_access_guard import PolicySnapshot, SourceRef
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.schemas.chat import MessageRequest
-from rag_access_guard_api.services import chat
+from rag_access_guard_api.services import chat_completion
 from rag_access_guard_api.services.chat_state import NeutralReason, StoredTurn
 from rag_access_guard_api.services.chat_turns import ReleasedAnswer, complete_turn
 from rag_access_guard_api.services.security import ReadUoW
@@ -160,7 +160,7 @@ def test_completion_transaction_failure_rolls_back_answer(
         message = "PRIVATE_TRANSACTION_FAILURE"
         raise SQLAlchemyError(message)
 
-    monkeypatch.setattr(chat, "complete_turn", fail_after_write)
+    monkeypatch.setattr(chat_completion, "complete_turn", fail_after_write)
     response = chat_case.client.post(
         f"/api/chat/threads/{chat_case.thread}/messages",
         json=question().model_dump(mode="json"),

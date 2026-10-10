@@ -11,7 +11,7 @@ from sqlalchemy.pool import PoolProxiedConnection
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.server import create_event_loop
-from rag_access_guard_api.services import chat
+from rag_access_guard_api.services import chat_completion
 from rag_access_guard_api.services.chat_state import NeutralReason, StoredTurn
 from rag_access_guard_api.services.chat_turns import ReleasedAnswer, complete_turn
 from rag_access_guard_api.services.security import ReadUoW
@@ -51,7 +51,7 @@ def test_protected_asgi_bytes_follow_actual_database_commit(
         if is_release:
             surface.committed.set()
 
-    monkeypatch.setattr(chat, "complete_turn", mark)
+    monkeypatch.setattr(chat_completion, "complete_turn", mark)
     monkeypatch.setattr(PGDialect_psycopg, "do_commit", commit)
     event.listen(Engine, "commit", before_commit)
     try:

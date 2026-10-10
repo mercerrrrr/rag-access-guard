@@ -19,7 +19,7 @@ from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.persistence import ChatTurn, DocumentGrant
 from rag_access_guard_api.schemas.chat import MessageRequest
-from rag_access_guard_api.services import chat, security
+from rag_access_guard_api.services import chat, chat_completion, security
 from tests.integration.test_chat_history_boundaries import add_document
 from tests.support.chat import ChatHttp
 from tests.support.chat_generation import ChatCase
@@ -166,6 +166,7 @@ def test_lease_equality_after_preparation_prevents_model_call(
 
     monkeypatch.setattr(PostgresPolicyReader, "snapshot", snapshot)
     monkeypatch.setattr(chat, "database_clock", clock)
+    monkeypatch.setattr(chat_completion, "database_clock", clock)
     result = chat_case.send(
         MessageRequest(request_id=uuid4(), expected_thread_revision=0, user_input="QUESTION")
     )
@@ -215,7 +216,7 @@ def test_lease_expiring_during_retry_preparation_prevents_second_model_call(
         thread_id: UUID | None = None,
     ) -> PolicySnapshot:
         result = await original(self, principal_id, refs, thread_id=thread_id)
-        if thread_id is None:
+        if thread_id is None and result.revision not in snapshots:
             snapshots.append(result.revision)
         return result
 
@@ -228,6 +229,7 @@ def test_lease_expiring_during_retry_preparation_prevents_second_model_call(
 
     monkeypatch.setattr(PostgresPolicyReader, "snapshot", snapshot)
     monkeypatch.setattr(chat, "database_clock", clock)
+    monkeypatch.setattr(chat_completion, "database_clock", clock)
     result = retry_case.run_with_revocations(count=1)
     assert len(snapshots) == 2
     assert snapshots[1] > snapshots[0]

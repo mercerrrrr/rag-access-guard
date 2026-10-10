@@ -10,6 +10,7 @@ from rag_access_guard_api.adapters.canonical import CanonicalChunk, canonical_qu
 from rag_access_guard_api.persistence import ChatThread, Document, DocumentChunk, DocumentVersion
 from rag_access_guard_api.schemas.search import InvalidProvenanceError
 from rag_access_guard_api.services.access import readable_document
+from rag_access_guard_api.services.origin import InvalidOriginError, read_version_origin
 from rag_access_guard_api.services.security import ReadUoW
 
 
@@ -88,6 +89,12 @@ class PostgresPolicyReader:
                     denied.append(ref)
                     continue
                 if canonical.allowed and owned is not False:
+                    try:
+                        _ = await read_version_origin(self.uow.connection, ref.document_version_id)
+                    except InvalidOriginError:
+                        valid = False
+                        denied.append(ref)
+                        continue
                     allowed.append(ref)
                     hashes.append((ref, candidate.content_sha256))
                 else:

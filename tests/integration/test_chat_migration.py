@@ -39,7 +39,7 @@ def test_chat_migration_preserves_documents_and_refuses_history_loss(
     with auth_database.connect() as connection:
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0012_docx_ingestion"
+            == "0013_document_origin"
         )
         assert connection.execute(text("SELECT count(*) FROM chat_threads")).scalar_one() == 1
 

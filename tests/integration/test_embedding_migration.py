@@ -29,5 +29,5 @@ def test_embedding_downgrade_refuses_data_loss(
         )
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0012_docx_ingestion"
+            == "0013_document_origin"
         )

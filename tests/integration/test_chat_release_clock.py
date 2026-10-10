@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from rag_access_guard import PolicySnapshot, SourceRef
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.schemas.chat import MessageRequest
-from rag_access_guard_api.services import chat, security
+from rag_access_guard_api.services import chat_completion, security
 from tests.support.chat import ChatHttp
 from tests.support.chat_generation import ChatCase
 
@@ -41,7 +41,9 @@ def test_expiry_during_release_check_prevents_answer_write(
         return now + timedelta(hours=9) if checked else now
 
     monkeypatch.setattr(PostgresPolicyReader, "snapshot", snapshot)
-    monkeypatch.setattr(security if boundary == "session" else chat, "database_clock", clock)
+    monkeypatch.setattr(
+        security if boundary == "session" else chat_completion, "database_clock", clock
+    )
     # When: an otherwise allowed generation reaches the final gate.
     payload = MessageRequest(request_id=uuid4(), expected_thread_revision=0, user_input="QUESTION")
     response = chat_case.client.post(
