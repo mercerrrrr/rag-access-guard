@@ -24,11 +24,12 @@ class ExpectedReadyHealth(BaseModel):
     status: Literal["ok"]
 
 
-def test_reports_unavailable_before_access_schema_migration(
-    isolated_database_url: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("revision", ["0001_pgvector", "0011_history_closure"])
+def test_reports_unavailable_before_required_schema_migration(
+    isolated_database_url: str, monkeypatch: pytest.MonkeyPatch, revision: str
 ) -> None:
     monkeypatch.setenv("RAG_ACCESS_GUARD_DATABASE_URL", isolated_database_url)
-    command.upgrade(Config("apps/api/alembic.ini"), "0001_pgvector")
+    command.upgrade(Config("apps/api/alembic.ini"), revision)
     with TestClient(create_app(), backend_options={"loop_factory": create_event_loop}) as client:
         response = client.get("/api/health/ready")
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE

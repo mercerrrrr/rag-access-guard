@@ -5,7 +5,7 @@ import { ApiError } from "@/api/errors";
 import type { ApiErrorCode } from "@/api/errors";
 
 const queryErrorSchema = z.strictObject({
-  detail: z.strictObject({ code: z.enum(["query_too_long", "inference_busy", "inference_unavailable"]) }),
+  detail: z.strictObject({ code: z.enum(["query_too_long", "inference_busy", "inference_unavailable", "unsupported_structure"]) }),
 });
 
 export type JsonRequest<T> = {
@@ -45,7 +45,7 @@ export async function requestJson<T>(path: string, options: JsonRequest<T>): Pro
           const parsed = queryErrorSchema.safeParse(body);
           if (parsed.success) {
             const candidate = parsed.data.detail.code;
-            if ((response.status === 422 && candidate === "query_too_long")
+            if ((response.status === 422 && (candidate === "query_too_long" || candidate === "unsupported_structure"))
               || (response.status === 429 && candidate === "inference_busy")
               || (response.status === 503 && candidate === "inference_unavailable")) code = candidate;
           }

@@ -6,11 +6,14 @@ import type { AllowedDocument, DocumentEntry, DocumentText, DocumentUpload, Docu
 import type { SessionState } from "@/composables/useSession";
 
 function documentError(error: ApiError): string {
+  if (error.status === 422 && error.code === "unsupported_structure") {
+    return "Поддерживаются текстовые абзацы и обычные таблицы. Сохраните содержимое без неподдерживаемых объектов или загрузите текстовый PDF.";
+  }
   switch (error.status) {
     case 404: return "Документ или версия недоступны. Обновите реестр.";
     case 409: return "Документ изменился во время операции. Обновите реестр перед повторной загрузкой.";
     case 413: return "Файл превышает допустимый размер 10 МиБ.";
-    case 415: return "Тип файла не поддерживается. Используйте TXT, Markdown или текстовый PDF.";
+    case 415: return "Тип файла не поддерживается. Используйте TXT, Markdown, текстовый PDF или DOCX.";
     case 422: return "Файл или название не прошли проверку. PDF должен содержать текст и не больше 200 страниц.";
     case 503: return "Обработка недоступна. Проверьте список версий перед повторной загрузкой.";
     default: return "Операция не подтверждена. Обновите реестр перед повторным действием.";

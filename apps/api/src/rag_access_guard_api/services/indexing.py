@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from rag_access_guard_api.adapters import embeddings
+from rag_access_guard_api.adapters.docx_protocol import DOCX_MIME
+from rag_access_guard_api.adapters.docx_protocol import parser_options as docx_options
 from rag_access_guard_api.adapters.embeddings import EmbeddingAdapter
 from rag_access_guard_api.adapters.pdf_protocol import parser_options
 from rag_access_guard_api.persistence import Document, DocumentVersion
@@ -50,6 +52,8 @@ async def prepare_index(
             **(
                 {"parser_options": parser_options()}
                 if prepared.parsed.media_type == "application/pdf"
+                else {"parser_options": docx_options()}
+                if prepared.parsed.media_type == DOCX_MIME
                 else {}
             ),
             "chunker_revision": prepared.manifest.chunker_revision,
@@ -187,7 +191,8 @@ async def index_document_version(  # noqa: PLR0913
             raise DocumentError(404)
         if not row[3]:
             raise ForbiddenError
-        filename = "source.pdf" if row[1] == "application/pdf" else "source.md"
+        extension = {"application/pdf": "pdf", DOCX_MIME: "docx"}.get(row[1], "md")
+        filename = f"source.{extension}"
         upload = UploadPayload(filename=filename, media_type=row[1], data=row[0])
         expected = row[2]
     prepared = await prepare_index(upload, embedder)

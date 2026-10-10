@@ -8,22 +8,27 @@ from rag_access_guard_api.database import create_database_engine
 from rag_access_guard_api.schemas.documents import DocumentSummary, DocumentVersionSummary
 from rag_access_guard_api.server import create_event_loop
 from rag_access_guard_api.services.indexing import index_document_version
+from tests.helpers.docx_factory import DOCX_MIME, paragraph_table_docx
 from tests.helpers.pdf_factory import text_pdf
 from tests.integration.embedding_fixtures import DeterministicEmbedder
 
 
-@pytest.mark.parametrize("pdf", [False, True], ids=["text", "pdf"])
+@pytest.mark.parametrize("kind", ["text", "pdf", "docx"])
 def test_model_revision_change_creates_new_document_version(
     registered_document: DocumentSummary,
     admin_client: TestClient,
     auth_database: Engine,
-    *,
-    pdf: bool,
+    kind: str,
 ) -> None:
-    if pdf:
+    if kind != "text":
+        raw, mime = (
+            (text_pdf(("PDF source",)), "application/pdf")
+            if kind == "pdf"
+            else (paragraph_table_docx("DOCX source", (), ""), DOCX_MIME)
+        )
         response = admin_client.post(
             f"/api/admin/documents/{registered_document.id}/versions",
-            files={"file": ("source.pdf", text_pdf(("PDF source",)), "application/pdf")},
+            files={"file": (f"source.{kind}", raw, mime)},
             headers={
                 "Origin": "https://rag.test",
                 "X-CSRF-Token": admin_client.cookies["__Host-rag_csrf"],

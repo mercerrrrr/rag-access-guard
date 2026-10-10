@@ -22,8 +22,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_as_dataclass, mapped_column
 
 from rag_access_guard_api.persistence.base import Base
+from rag_access_guard_api.persistence.docx_manifest import DOCX_MANIFEST, DOCX_MEDIA, DOCX_PARSER
 from rag_access_guard_api.persistence.embedding_manifest import EMBEDDING_MANIFEST
-from rag_access_guard_api.persistence.pdf_manifest import PDF_MANIFEST, PDF_MEDIA, PDF_PARSER
+from rag_access_guard_api.persistence.pdf_manifest import PDF_MANIFEST
 
 
 @mapped_as_dataclass(Base.registry, kw_only=True)
@@ -50,14 +51,15 @@ class DocumentVersion:
         CheckConstraint(
             "extracted_text ~ '[^[:space:]]'", name="ck_document_versions_text_nonblank"
         ),
-        CheckConstraint(PDF_MEDIA, name="ck_document_versions_media_type"),
-        CheckConstraint(PDF_PARSER, name="ck_document_versions_parser_revision"),
+        CheckConstraint(DOCX_MEDIA, name="ck_document_versions_media_type"),
+        CheckConstraint(DOCX_PARSER, name="ck_document_versions_parser_revision"),
         CheckConstraint(
             "status IN ('stored', 'chunked', 'indexing', 'ready', 'failed')",
             name="ck_document_versions_status",
         ),
         CheckConstraint(
-            """(media_type <> 'application/pdf' AND (ingestion_manifest = jsonb_build_object(
+            """(media_type IN ('text/plain','text/markdown')
+            AND (ingestion_manifest = jsonb_build_object(
             'schema_version', 1, 'source_sha256', content_sha256, 'text_sha256', text_sha256,
             'byte_size', byte_size, 'parser_revision', parser_revision,
             'chunker_revision', NULL, 'tokenizer_revision', NULL,
@@ -78,7 +80,9 @@ class DocumentVersion:
                 'UTF8')), 'hex')) OR """
             + EMBEDDING_MANIFEST
             + ")) OR "
-            + PDF_MANIFEST,
+            + PDF_MANIFEST
+            + " OR "
+            + DOCX_MANIFEST,
             name="ck_document_versions_manifest",
         ),
         CheckConstraint(
@@ -96,7 +100,7 @@ class DocumentVersion:
     content_sha256: Mapped[str] = mapped_column(CHAR(64))
     extracted_text: Mapped[str] = mapped_column(Text, repr=False)
     text_sha256: Mapped[str] = mapped_column(CHAR(64))
-    media_type: Mapped[str] = mapped_column(String(64))
+    media_type: Mapped[str] = mapped_column(String(128))
     byte_size: Mapped[int] = mapped_column(BigInteger)
     parser_revision: Mapped[str] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(16))

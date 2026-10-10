@@ -4,6 +4,7 @@ import pytest
 
 from rag_access_guard_api.schemas.documents import DocumentSummary
 from rag_access_guard_api.services.sources import build_source_url
+from tests.helpers.docx_factory import DOCX_MIME, paragraph_table_docx
 from tests.helpers.pdf_factory import text_pdf
 from tests.support.chat import ChatHttp
 from tests.support.downloads import DownloadCase, source_ref
@@ -23,7 +24,7 @@ def test_old_original_url_cannot_download_after_revoke(download_case: DownloadCa
     assert denied.headers["cache-control"] == "private, no-store"
 
 
-@pytest.mark.parametrize("kind", ["txt", "md", "pdf"])
+@pytest.mark.parametrize("kind", ["txt", "md", "pdf", "docx"])
 def test_original_returns_exact_stored_bytes_as_attachment(
     download_case: DownloadCase, kind: str
 ) -> None:
@@ -31,9 +32,16 @@ def test_original_returns_exact_stored_bytes_as_attachment(
     raw = (
         text_pdf(("SYNTHETIC_PDF",), script=True)
         if kind == "pdf"
+        else paragraph_table_docx("DOCX synthetic", (), "")
+        if kind == "docx"
         else b"\xef\xbb\xbf# SYNTHETIC\r\n"
     )
-    media = {"txt": "text/plain", "md": "text/markdown", "pdf": "application/pdf"}[kind]
+    media = {
+        "txt": "text/plain",
+        "md": "text/markdown",
+        "pdf": "application/pdf",
+        "docx": DOCX_MIME,
+    }[kind]
     uploaded = case.client.post(
         "/api/admin/documents",
         data={"title": "<script>SYNTHETIC</script>"},
@@ -55,7 +63,9 @@ def test_original_returns_exact_stored_bytes_as_attachment(
     assert response.status_code == 200
     assert response.content == raw
     assert sha256(response.content).digest() == sha256(raw).digest()
-    assert response.headers["content-type"] == media + ("; charset=utf-8" if kind != "pdf" else "")
+    assert response.headers["content-type"] == media + (
+        "; charset=utf-8" if kind in {"txt", "md"} else ""
+    )
     assert response.headers["content-disposition"] == f'attachment; filename="{document.id}.{kind}"'
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["cache-control"] == "private, no-store"

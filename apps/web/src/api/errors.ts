@@ -1,4 +1,4 @@
-export type ApiErrorCode = "query_too_long" | "inference_busy" | "inference_unavailable";
+export type ApiErrorCode = "query_too_long" | "inference_busy" | "inference_unavailable" | "unsupported_structure";
 
 export class ApiError extends Error {
   override readonly name = "ApiError";

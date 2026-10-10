@@ -9,6 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 it.each([
   { status: 429, code: "inference_busy" },
   { status: 503, code: "inference_unavailable" },
+  { status: 422, code: "unsupported_structure" },
 ])("recognizes_closed_inference_error_without_retry", async ({ status, code }) => {
   let calls = 0;
   vi.stubGlobal("fetch", () => {
@@ -24,6 +25,8 @@ it.each([
   { status: 429, body: { detail: { code: "inference_busy", path: "private" } } },
   { status: 503, body: { detail: { code: "inference_unavailable" }, pid: 123 } },
   { status: 503, body: { detail: { code: "inference_busy" } } },
+  { status: 503, body: { detail: { code: "unsupported_structure" } } },
+  { status: 422, body: { detail: { code: "unsupported_structure", path: "private" } } },
 ])("rejects_extra_fields_or_mismatched_inference_status", async ({ status, body }) => {
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json(body, { status })));
   await expect(requestJson("/api/chat/threads", { parse: (value) => csrfSchema.parse(value) }))

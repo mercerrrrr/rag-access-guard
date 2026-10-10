@@ -55,3 +55,15 @@ it("rename_and_deactivation_use_confirmed_registry", async () => {
   expect(state.items.value).toEqual([{ ...document, title: "Новое имя", is_active: false }]);
   state.dispose();
 });
+
+it("unsupported_docx_preserves_active_version_without_failed_row_or_raw_error", async () => {
+  const state = await setup({
+    uploadVersion: () => Promise.reject(new ApiError(422, null, "unsupported_structure")),
+  });
+  await state.uploadVersion({ documentId: document.id, file: new File(["synthetic"], "unsupported.docx") });
+  expect(state.versions.value).toEqual([version]);
+  expect(state.selected.value?.active_version_id).toBe(version.id);
+  expect(state.message.value).toContain("текстовые абзацы и обычные таблицы");
+  expect(state.message.value).not.toContain("Request failed");
+  state.dispose();
+});

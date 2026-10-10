@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import insert, update
 
+from rag_access_guard_api.adapters.docx_parser import parse_docx
+from rag_access_guard_api.adapters.docx_protocol import parser_options as docx_options
 from rag_access_guard_api.adapters.embeddings import MODEL_ID
 from rag_access_guard_api.adapters.pdf_parser import parse_pdf
 from rag_access_guard_api.adapters.pdf_protocol import parser_options
@@ -40,7 +42,9 @@ class PreparedUpload:
 
 def prepare_upload(upload: UploadPayload) -> PreparedUpload:
     """Run on a worker thread, outside all database transactions."""
-    parsed = parse_pdf(upload) if upload.filename.lower().endswith(".pdf") else parse_text(upload)
+    extension = upload.filename.lower().rsplit(".", 1)[-1]
+    parsers = {"pdf": parse_pdf, "docx": parse_docx}
+    parsed = parsers.get(extension, parse_text)(upload)
     tokenizer = get_tokenizer()
     chunks = chunk_text(parsed.text, tokenizer)
     config = json.dumps(
@@ -49,6 +53,8 @@ def prepare_upload(upload: UploadPayload) -> PreparedUpload:
             **(
                 {"parser_options": parser_options()}
                 if parsed.media_type == "application/pdf"
+                else {"parser_options": docx_options()}
+                if extension == "docx"
                 else {}
             ),
             "chunker_revision": CHUNKER_REVISION,

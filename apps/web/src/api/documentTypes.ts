@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const docxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 export const allowedDocumentSchema = z.object({
   id: z.uuid(), title: z.string(), active_version_id: z.uuid(),
 }).readonly();

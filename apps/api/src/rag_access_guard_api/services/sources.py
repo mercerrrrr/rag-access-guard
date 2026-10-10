@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from rag_access_guard import Guard, SourceRef
+from rag_access_guard_api.adapters.docx_protocol import DOCX_MIME
 from rag_access_guard_api.adapters.llm import FakeTokenCounter
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.persistence import Document, DocumentChunk, DocumentVersion
@@ -92,9 +93,12 @@ async def read_original(uow: ReadUoW, source_ref: SourceRef) -> OriginalContent:
         manifest = IngestionManifest.model_validate(raw_manifest)
     except ValidationError:
         raise SourceNotFound from None
-    extension = {"text/plain": "txt", "text/markdown": "md", "application/pdf": "pdf"}.get(
-        media_type
-    )
+    extension = {
+        "text/plain": "txt",
+        "text/markdown": "md",
+        "application/pdf": "pdf",
+        DOCX_MIME: "docx",
+    }.get(media_type)
     if (
         extension is None
         or not 0 < len(data) <= MAX_TEXT_BYTES

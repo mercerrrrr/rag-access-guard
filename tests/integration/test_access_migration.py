@@ -15,7 +15,7 @@ def test_access_migration_roundtrip_preserves_vector(
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == ("0011_history_closure")
+            ).scalar_one() == ("0012_docx_ingestion")
             assert connection.execute(text("SELECT revision FROM policy_state")).scalar_one() == 0
         command.check(config)
         command.downgrade(config, "0001_pgvector")

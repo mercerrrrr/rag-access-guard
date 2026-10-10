@@ -33,3 +33,16 @@ it("oversized_file_is_rejected_before_upload", async () => {
   expect(wrapper.emitted("upload")).toBeUndefined();
   expect(wrapper.find('[role="alert"]').exists()).toBe(true);
 });
+
+it.each(["application/vnd.openxmlformats-officedocument.wordprocessingml.document", ""])("docx_upload_accepts_declared_or_inferred_mime (%s)", async (type) => {
+  const wrapper = mount(DocumentUpload, { props: { busy: false, version: true } });
+  const input = wrapper.get('input[type="file"]');
+  const file = new File(["synthetic"], "FILE.DOCX", { type });
+  Object.defineProperty(input.element, "files", { value: { item: () => file } });
+  await input.trigger("change");
+  await wrapper.get("form").trigger("submit");
+  const uploaded = wrapper.emitted<{ title: string; file: File }[]>("upload")?.[0]?.[0];
+  expect(uploaded?.file.type).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  expect(uploaded?.file.name).toBe("FILE.DOCX");
+  expect(wrapper.emitted("upload")).toHaveLength(1);
+});

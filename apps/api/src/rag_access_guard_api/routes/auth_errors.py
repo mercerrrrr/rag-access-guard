@@ -109,6 +109,22 @@ async def _inference_unavailable(_request: Request, _: InferenceUnavailableError
     return JSONResponse(status_code=503, content={"detail": {"code": "inference_unavailable"}})
 
 
+async def _invalid_document(_request: Request, error: DocumentError) -> JSONResponse:
+    if error.code == "unsupported_structure":
+        return JSONResponse(
+            status_code=error.status, content={"detail": {"code": "unsupported_structure"}}
+        )
+    details = {
+        404: "Not found",
+        413: "Upload too large",
+        415: "Unsupported media type",
+        422: "Invalid document",
+        503: "Service unavailable",
+    }
+    detail = "Text layer required" if error.code == "text_layer_required" else details[error.status]
+    return JSONResponse(status_code=error.status, content={"detail": detail})
+
+
 def register_auth_errors(app: FastAPI) -> None:
     """Translate known failures without credentials or submitted document details."""
     app.add_middleware(AuthCacheMiddleware)
@@ -125,6 +141,7 @@ def register_auth_errors(app: FastAPI) -> None:
     _ = app.exception_handler(QueryTooLongError)(_query_too_long)
     _ = app.exception_handler(InferenceBusyError)(_inference_busy)
     _ = app.exception_handler(InferenceUnavailableError)(_inference_unavailable)
+    _ = app.exception_handler(DocumentError)(_invalid_document)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, _: Exception) -> JSONResponse:
@@ -182,17 +199,3 @@ def register_auth_errors(app: FastAPI) -> None:
     @app.exception_handler(SQLAlchemyError)
     async def unavailable(_request: Request, _: SQLAlchemyError) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": "Service unavailable"})
-
-    @app.exception_handler(DocumentError)
-    async def invalid_document(_request: Request, error: DocumentError) -> JSONResponse:
-        details = {
-            404: "Not found",
-            413: "Upload too large",
-            415: "Unsupported media type",
-            422: "Invalid document",
-            503: "Service unavailable",
-        }
-        detail = (
-            "Text layer required" if error.code == "text_layer_required" else details[error.status]
-        )
-        return JSONResponse(status_code=error.status, content={"detail": detail})

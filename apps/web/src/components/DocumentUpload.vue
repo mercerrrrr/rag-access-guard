@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, useId } from "vue";
+import { docxMediaType } from "@/api/documentTypes";
 const props = defineProps<{ busy: boolean; version?: boolean }>();
 const emit = defineEmits<{ upload: [value: { readonly title: string; readonly file: File }] }>();
 const id = useId();
@@ -24,10 +25,11 @@ function submit() {
   const mime = selected.type.toLowerCase();
   const allowed = extension === "txt" ? ["text/plain"]
     : extension === "md" ? ["text/plain", "text/markdown"]
-      : extension === "pdf" ? ["application/pdf"] : [];
+      : extension === "pdf" ? ["application/pdf"]
+        : extension === "docx" ? [docxMediaType] : [];
   const defaultMime = allowed[0];
   if (defaultMime === undefined || (mime !== "" && !allowed.includes(mime))) {
-    message.value = "Выберите TXT, Markdown или PDF с подходящим типом файла."; return;
+    message.value = "Выберите TXT, Markdown, PDF или DOCX с подходящим типом файла."; return;
   }
   const normalizedTitle = title.value.trim();
   if (!props.version && (normalizedTitle.length === 0 || normalizedTitle.includes("\0"))) {
@@ -65,7 +67,7 @@ function submit() {
       <input
         :id="`${id}-file`"
         type="file"
-        accept=".txt,.md,.pdf"
+        accept=".txt,.md,.pdf,.docx"
         required
         :disabled="busy"
         :aria-describedby="`${id}-hint`"
@@ -75,7 +77,8 @@ function submit() {
         :id="`${id}-hint`"
         class="document-upload__hint"
       >
-        TXT, Markdown или текстовый PDF. До 10 МиБ; PDF до 200 страниц, без OCR.
+        TXT, Markdown, текстовый PDF или DOCX. До 10 МиБ; PDF до 200 страниц, без OCR.
+        DOCX: текстовые абзацы и обычные таблицы, без изображений и специальных объектов.
       </p>
     </div>
     <p

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 type IngestionFailure = Literal[
     "text_layer_required",
     "unsupported_type",
+    "unsupported_structure",
     "invalid_encoding",
     "empty_text",
     "size_limit",
