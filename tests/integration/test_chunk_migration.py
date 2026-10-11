@@ -20,5 +20,5 @@ def test_chunk_downgrade_refuses_data_loss(
         assert connection.execute(text("SELECT * FROM document_chunks")).all() == before
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0013_document_origin"
+            == "0014_demo_seed_state"
         )

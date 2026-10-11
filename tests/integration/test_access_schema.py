@@ -11,6 +11,8 @@ def test_access_schema_starts_without_accounts_or_grants(schema_connection: Conn
         "documents",
         "document_versions",
         "document_origins",
+        "demo_seed_state",
+        "demo_seed_steps",
         "document_chunks",
         "chunk_embeddings",
         "document_grants",

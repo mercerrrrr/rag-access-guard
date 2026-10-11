@@ -1,22 +1,20 @@
 """Create a user through a trusted local operator workflow."""
 
 import getpass
-from dataclasses import dataclass
 from typing import Annotated, Final
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import anyio
 import psycopg
 import typer
-from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.database import create_database_engine
-from rag_access_guard_api.persistence import PolicyState, User
 from rag_access_guard_api.server import create_event_loop
-from rag_access_guard_api.services.audit import AuditRecord, write_audit
 from rag_access_guard_api.services.passwords import hash_password
+from rag_access_guard_api.services.security import lock_policy
+from rag_access_guard_api.services.user_creation import CreateUserRequest, insert_user_record
 
 MAX_LOGIN_CHARACTERS: Final = 254
 MAX_DISPLAY_NAME_CHARACTERS: Final = 200
@@ -28,16 +26,6 @@ app = typer.Typer(
 )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CreateUserRequest:
-    """Validated values needed for one local account creation."""
-
-    login: str
-    display_name: str
-    password_hash: str
-    is_admin: bool
-
-
 class DuplicateLoginError(Exception):
     """The normalized login is already present."""
 
@@ -45,45 +33,11 @@ class DuplicateLoginError(Exception):
 async def create_user_record(request: CreateUserRequest) -> UUID:
     """Atomically insert the user, audit event, and policy revision."""
     engine = create_database_engine(Settings())
-    user_id = uuid4()
     try:
         try:
             async with engine.begin() as connection:
-                _ = (
-                    await connection.execute(
-                        select(PolicyState.revision).where(PolicyState.id == 1).with_for_update()
-                    )
-                ).scalar_one()
-                _ = await connection.execute(
-                    insert(User).values(
-                        id=user_id,
-                        login=request.login,
-                        display_name=request.display_name,
-                        password_hash=request.password_hash,
-                        is_admin=request.is_admin,
-                    )
-                )
-                revision = (
-                    await connection.execute(
-                        update(PolicyState)
-                        .where(PolicyState.id == 1)
-                        .values(
-                            revision=PolicyState.revision + 1,
-                            updated_at=func.clock_timestamp(),
-                        )
-                        .returning(PolicyState.revision)
-                    )
-                ).scalar_one()
-                await write_audit(
-                    connection,
-                    AuditRecord(
-                        event_type="user_changed",
-                        stage="policy",
-                        outcome="success",
-                        principal_id=user_id,
-                    ),
-                    revision,
-                )
+                _ = await lock_policy(connection, exclusive=True)
+                user_id = await insert_user_record(connection, request)
         except IntegrityError as error:
             if (
                 isinstance(error.orig, psycopg.Error)

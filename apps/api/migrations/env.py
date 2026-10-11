@@ -9,7 +9,7 @@ from rag_access_guard_api.persistence import Base
 
 def database_url() -> str:
     """Return the validated SQLAlchemy database URL."""
-    return str(Settings().database_url)
+    return context.config.get_main_option("demo_database_url") or str(Settings().database_url)
 
 
 def run_migrations_offline() -> None:

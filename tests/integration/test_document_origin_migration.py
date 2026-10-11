@@ -36,7 +36,7 @@ def test_origin_downgrade_refuses_existing_metadata(
         assert before[0] == ref.document_version_id
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0013_document_origin"
+            == "0014_demo_seed_state"
         )
 
 
@@ -99,7 +99,7 @@ def test_origin_downgrade_preserves_concurrently_committed_metadata(
         head = TypeAdapter(str).validate_python(
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         )
-        assert head == "0013_document_origin", (
+        assert head == "0014_demo_seed_state", (
             "Downgrade removed concurrently committed origin metadata"
         )
         row = (

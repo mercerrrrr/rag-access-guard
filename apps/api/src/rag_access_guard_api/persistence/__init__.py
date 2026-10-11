@@ -5,6 +5,7 @@ from rag_access_guard_api.persistence.auth_limits import AuthRateBucket
 from rag_access_guard_api.persistence.base import Base
 from rag_access_guard_api.persistence.chat import ChatThread, ChatTurn, TurnSource
 from rag_access_guard_api.persistence.chunks import DocumentChunk
+from rag_access_guard_api.persistence.demo_seed import DemoSeedState, DemoSeedStep
 from rag_access_guard_api.persistence.documents import Document, DocumentGrant
 from rag_access_guard_api.persistence.embeddings import ChunkEmbedding
 from rag_access_guard_api.persistence.identity import Role, User, UserRole
@@ -21,6 +22,8 @@ __all__ = [
     "ChatThread",
     "ChatTurn",
     "ChunkEmbedding",
+    "DemoSeedState",
+    "DemoSeedStep",
     "Document",
     "DocumentChunk",
     "DocumentGrant",
