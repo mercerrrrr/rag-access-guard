@@ -66,9 +66,10 @@ jobs:
       COMPOSE_PROJECT_NAME: rag-access-guard-ci-${{ github.run_id }}-${{ github.run_attempt }}
       POSTGRES_DB: rag_access_guard
       POSTGRES_PASSWORD: ci-only-not-a-secret
-      POSTGRES_PORT: "55432"
+      POSTGRES_PORT: "55466"
       POSTGRES_USER: rag_guard
-      RAG_ACCESS_GUARD_DATABASE_URL: postgresql+psycopg://rag_guard:ci-only-not-a-secret@127.0.0.1:55432/rag_access_guard
+      RAG_ACCESS_GUARD_DATABASE_URL: postgresql+psycopg://rag_guard:ci-only-not-a-secret@127.0.0.1:55466/rag_access_guard
+      RAG_E2E_DATABASE_ADMIN_URL: postgresql+psycopg://rag_guard:ci-only-not-a-secret@127.0.0.1:55466/postgres
 
     steps:
       - name: Check out repository with checkout v7.0.1

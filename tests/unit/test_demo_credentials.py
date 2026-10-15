@@ -1,4 +1,5 @@
 import os
+import stat
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
@@ -71,11 +72,30 @@ def test_additional_user_gets_recoverable_credential_without_original_rewrite(
 
 def test_existing_broad_parent_is_refused_without_creating_secret(tmp_path: Path) -> None:
     # Given: an existing unrelated directory whose ACL must not be silently tightened.
+    if os.name == "posix":
+        tmp_path.chmod(0o755)
+    original = tmp_path.stat()
     path = tmp_path / "credentials.json"
     # When/Then: secret creation refuses the directory and leaves it unchanged.
     with pytest.raises(DemoOwnershipError, match=r"credential_(acl_unavailable|permissions)"):
         _ = ensure_credentials(path, CredentialRecovery(marker_for(), access_fixture()))
     assert not path.exists()
+    assert tmp_path.stat() == original
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Actual POSIX owner and mode boundary")
+def test_existing_owner_only_parent_accepts_private_credentials(tmp_path: Path) -> None:
+    # Given: an existing directory explicitly restricted to the current POSIX owner.
+    tmp_path.chmod(0o700)
+    path = tmp_path / "credentials.json"
+    # When: credentials are published through the real permission boundary.
+    journal = ensure_credentials(path, CredentialRecovery(marker_for(), access_fixture()))
+    # Then: the existing parent remains private and the secret file is owner-only.
+    assert len(journal.entries) == 1
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o700
+    metadata = path.stat()
+    assert stat.S_IMODE(metadata.st_mode) == 0o600
+    assert metadata.st_uid == os.getuid()
 
 
 def test_exclusive_journal_race_recovers_one_durable_winner(tmp_path: Path) -> None:
