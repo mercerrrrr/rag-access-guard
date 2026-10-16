@@ -97,21 +97,38 @@ class DemoCollector:
                     await self.verify_runtime(client)
                     await self.admit(session, unit.gold)
                     observed = await self._question(client, unit)
-                    await self.verify_runtime(client)
-                    return base.model_copy(
+                    base = base.model_copy(
                         update={
-                            "status": "success",
-                            "elapsed_ms": (perf_counter() - started) * 1000,
                             "retrieved_refs": observed.retrieved_refs,
-                            "released_refs": observed.released_refs,
-                            "answer": observed.answer,
                             "chat_response_elapsed_ms": observed.chat_elapsed_ms,
                             "retrieval_observation": "separate_actor_search",
-                            "model_digest": self.expected_identity.model_digest,
-                            "policy_revision": self.expected_identity.policy_revision,
-                            "error_code": None,
                         }
                     )
+                    await self.verify_runtime(client)
+                    terminal = base.model_copy(
+                        update={
+                            "elapsed_ms": (perf_counter() - started) * 1000,
+                            "model_digest": self.expected_identity.model_digest,
+                            "policy_revision": self.expected_identity.policy_revision,
+                        }
+                    )
+                    match observed:
+                        case CaseObservation():
+                            terminal = terminal.model_copy(
+                                update={
+                                    "status": "success",
+                                    "released_refs": observed.released_refs,
+                                    "answer": observed.answer,
+                                    "error_code": None,
+                                }
+                            )
+                        case _ClosedCaseObservation():
+                            terminal = terminal.model_copy(
+                                update={"error_code": "closed_generation_failure"}
+                            )
+                        case _:
+                            assert_never(observed)
+                    return terminal
         except (TimeoutError, httpx2.TimeoutException):
             return base.model_copy(
                 update={
@@ -148,7 +165,9 @@ class DemoCollector:
                 }
             )
 
-    async def _question(self, client: httpx2.AsyncClient, unit: DemoUnit) -> "CaseObservation":
+    async def _question(
+        self, client: httpx2.AsyncClient, unit: DemoUnit
+    ) -> "CaseObservation | _ClosedCaseObservation":
         if unit.request_id is None:
             raise DemoDatasetError(code="request_identity_absent")
         response = await client.post("/api/search", json={"query": unit.gold.question, "limit": 5})
@@ -196,7 +215,7 @@ class DemoCollector:
                 return CaseObservation(retrieved, released, turn.answer, elapsed)
             case NeutralTurn() as turn:
                 if turn.message != "Нет доступных источников для ответа.":
-                    raise DemoDatasetError(code="closed_generation_failure")
+                    return _ClosedCaseObservation(retrieved, elapsed)
                 return CaseObservation(retrieved, (), turn.message, elapsed)
             case PendingTurn() | UnavailableTurn():
                 raise DemoDatasetError(code="incomplete_chat_response")
@@ -211,4 +230,10 @@ class CaseObservation:
     retrieved_refs: tuple[DemoSourceRef, ...]
     released_refs: tuple[DemoSourceRef, ...]
     answer: str
+    chat_elapsed_ms: float
+
+
+@dataclass(frozen=True, slots=True)
+class _ClosedCaseObservation:
+    retrieved_refs: tuple[DemoSourceRef, ...]
     chat_elapsed_ms: float

@@ -60,3 +60,27 @@ class DemoCalibrationReport(CorpusValue):
     config: RetrievalConfig
     chosen: DemoThresholdScore
     grid: tuple[DemoThresholdScore, ...]
+
+
+class DemoCaseThresholdScore(CorpusValue):
+    """Case counts for the versioned adequacy objective, not chunk TP/FP/FN."""
+
+    threshold: float
+    answerable_count: int
+    sufficient_answerable: int
+    abstain_count: int
+    empty_abstain: int
+    retrieved_chunks: int
+    balanced_adequacy: float
+
+
+class DemoCaseCalibrationReport(CorpusValue):
+    """Version two keeps the previous micro-F1 report interpretable without migration."""
+
+    schema_version: Literal[2] = 2
+    dataset_sha256: Sha256
+    calibration_cases_sha256: Sha256
+    corpus_sha256: Sha256
+    config: RetrievalConfig
+    chosen: DemoCaseThresholdScore
+    grid: tuple[DemoCaseThresholdScore, ...]

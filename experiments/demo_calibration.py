@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from experiments.demo_admission import DemoAdmission
+from experiments.demo_calibration_scoring import score_case_thresholds, select_case_threshold
 from experiments.demo_http import demo_client
 from experiments.demo_inputs import DemoInputs, calibration_cases_hash
 from experiments.demo_run_contracts import DemoRunPlan, DemoUnit
@@ -18,15 +19,13 @@ from rag_access_guard_api.adapters.embeddings import MODEL_ID, get_embedding_ada
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION, TOKENIZER_IDENTITY
 from rag_access_guard_api.demo.calibration import actor_top_five
 from rag_access_guard_api.demo.calibration_contracts import (
-    DemoCalibrationReport,
     DemoCalibrationResult,
+    DemoCaseCalibrationReport,
     DemoChunkScore,
-    DemoThresholdScore,
 )
 from rag_access_guard_api.demo.evaluation import DemoDatasetError
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.retrieval_config import RetrievalConfig
-from rag_access_guard_api.services.calibration import ScoredQuery, score_thresholds
 from rag_access_guard_api.services.chunking import CHUNKER_REVISION
 from rag_access_guard_api.services.errors import UnauthenticatedError
 from rag_access_guard_api.services.security import PolicyUnitOfWork
@@ -36,7 +35,7 @@ CALIBRATION_COUNT: Final = 20
 
 @dataclass(frozen=True, slots=True)
 class DemoCalibration:
-    """Only scheduled calibration cases can reach the unchanged threshold scorer."""
+    """Only scheduled calibration cases can reach threshold selection."""
 
     inputs: DemoInputs
     plan: DemoRunPlan
@@ -125,42 +124,37 @@ class DemoCalibration:
 
 def calibration_report(
     inputs: DemoInputs, rows: tuple[DemoCalibrationResult, ...]
-) -> DemoCalibrationReport:
+) -> DemoCaseCalibrationReport:
     """Persist grid and computed RetrievalConfig privately, never change the selected default."""
-    if len(rows) != CALIBRATION_COUNT or any(
-        r.status != "success" or r.scores is None or r.gold.split != "calibration" for r in rows
+    cases = {c.id: c for c in inputs.dataset.cases if c.split == "calibration"}
+    if (
+        len(rows) != CALIBRATION_COUNT
+        or len(cases) != CALIBRATION_COUNT
+        or {r.case_id for r in rows} != cases.keys()
+        or any(
+            r.status != "success" or r.scores is None or r.gold != cases.get(r.case_id)
+            for r in rows
+        )
     ):
         raise DemoDatasetError(code="incomplete_calibration")
-    scores = score_thresholds(
-        tuple(
-            ScoredQuery(
-                scores=tuple((score.chunk_id, score.score) for score in row.scores or ()),
-                relevant=frozenset(row.relevant),
-            )
-            for row in rows
-        )
-    )
+    grid = score_case_thresholds(rows)
+    chosen = select_case_threshold(grid)
     config = RetrievalConfig(
-        threshold=scores.chosen.threshold,
-        no_results=scores.chosen.threshold > 1,
+        threshold=chosen.threshold,
+        no_results=chosen.threshold > 1,
         dataset_sha256=calibration_cases_hash(inputs.dataset),
         corpus_sha256=inputs.dataset.corpus_sha256,
         model_id=MODEL_ID,
         model_revision=MODEL_REVISION,
         tokenizer_revision=TOKENIZER_IDENTITY,
         chunker_revision=CHUNKER_REVISION,
-        scorer_revision="micro-f1-top5-v1",
+        scorer_revision="case-balanced-adequacy-top5-v1",
         similarity_revision="pgvector-0.8.6-vector-cosine-v1",
         config_sha256="0" * 64,
     )
     config = config.model_copy(update={"config_sha256": config.computed_hash()})
     config.require_compatible()
-    grid = tuple(
-        DemoThresholdScore(threshold=r.threshold, tp=r.tp, fp=r.fp, fn=r.fn, f1=r.f1)
-        for r in scores.grid
-    )
-    chosen = next(row for row in grid if row.threshold == scores.chosen.threshold)
-    return DemoCalibrationReport(
+    return DemoCaseCalibrationReport(
         dataset_sha256=inputs.dataset.dataset_sha256,
         calibration_cases_sha256=calibration_cases_hash(inputs.dataset),
         corpus_sha256=inputs.dataset.corpus_sha256,

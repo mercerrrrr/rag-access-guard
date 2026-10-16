@@ -28,7 +28,7 @@ class RetrievalConfig(BaseModel):
     model_revision: str
     tokenizer_revision: str
     chunker_revision: str
-    scorer_revision: Literal["micro-f1-top5-v1"]
+    scorer_revision: Literal["micro-f1-top5-v1", "case-balanced-adequacy-top5-v1"]
     similarity_revision: Literal["pgvector-0.8.6-vector-cosine-v1"]
     config_sha256: Digest
 
