@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Literal
 
 from experiments.comparison_config import ComparisonConfig
+from experiments.execution_loop import ExecutionHooks, execute_schedule
 from experiments.harness import ScenarioHarness
-from experiments.run_manifest import RunCounts, RunManifest
+from experiments.run_manifest import RunCounts, RunManifest, TrialSpec
 from experiments.run_storage import atomic_write
 from experiments.scenario_types import Scenario
 from experiments.trials import TrialRecord, execute_trial
@@ -28,7 +29,7 @@ class RunExecution:
 
     def _checkpoint(
         self,
-        records: list[TrialRecord],
+        records: tuple[TrialRecord, ...],
         *,
         status: Literal["running", "completed", "failed", "invalid"],
         reason: str | None,
@@ -66,19 +67,31 @@ class RunExecution:
 
     async def run(self) -> RunManifest:
         """Return the actual terminal run state, never an inferred success."""
-        records: list[TrialRecord] = []
+        records: tuple[TrialRecord, ...] = ()
         _ = self._checkpoint(records, status="running", reason=None)
         status: Literal["completed", "failed", "invalid"] = "failed"
         reason: str | None = "run_interrupted"
         try:
-            for trial in self.manifest.schedule:
-                record = await execute_trial(
+
+            async def execute(trial: TrialSpec) -> TrialRecord:
+                return await execute_trial(
                     trial, self.scenarios[trial.case_id], self.config, self.harness
                 )
-                records.append(record)
+
+            def checkpoint(terminal: tuple[TrialRecord, ...]) -> None:
+                nonlocal records
+                records = terminal
                 _ = self._checkpoint(records, status="running", reason=None)
-                if record.error_code == "interrupted":
-                    break
+
+            records = await execute_schedule(
+                self.manifest.schedule,
+                ExecutionHooks(
+                    execute=execute,
+                    started=lambda _trial: None,
+                    checkpoint=checkpoint,
+                    should_stop=lambda record: record.error_code == "interrupted",
+                ),
+            )
             if len(records) != len(self.manifest.schedule) or any(
                 record.status == "failed" for record in records
             ):
