@@ -1,7 +1,7 @@
 """Closed immutable generation bundles, with the scientific legacy identity retained."""
 
 from dataclasses import dataclass
-from typing import ClassVar, Final, Literal, TypedDict
+from typing import ClassVar, Final, Literal, TypedDict, assert_never
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,7 +17,9 @@ from rag_access_guard_api.services.model_manifest import (
     ModelManifest,
 )
 
-type ProfileId = Literal["qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1"]
+type ProfileId = Literal[
+    "qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1", "qwen3-instruct-compact-demo-v1"
+]
 
 
 class InstructManifest(BaseModel):
@@ -32,7 +34,7 @@ class InstructManifest(BaseModel):
     tokenizer_revision: Literal["cdbee75f17c01a7cc42f958dc650907174af0554"] = (
         "cdbee75f17c01a7cc42f958dc650907174af0554"
     )
-    context_window: Literal[8192] = 8192
+    context_window: Literal[4096, 8192] = 8192
     max_output_tokens: Literal[512] = 512
     prompt_revision: Literal["rag-instruct-ru-origin-v2"] = "rag-instruct-ru-origin-v2"
 
@@ -77,39 +79,57 @@ class ModelProfile:
     renderer_revision: str
 
     def messages(self, *, user_input: str, system_supplied_context: str) -> list[ModelMessage]:
-        """Keep the two user sections separate on the wire for both profiles."""
+        """Keep the two user sections separate on the wire for every profile."""
         messages = build_messages(
             user_input=user_input, system_supplied_context=system_supplied_context
         )
-        if self.profile_id == "qwen3-instruct-demo-v1":
-            messages[0] = {"role": "system", "content": INSTRUCT_SYSTEM}
+        match self.profile_id:
+            case "qwen3-thinking-legacy-v1":
+                pass
+            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+                messages[0] = {"role": "system", "content": INSTRUCT_SYSTEM}
+            case _:
+                assert_never(self.profile_id)
         return messages
 
     def render(self, *, user_input: str, system_supplied_context: str) -> str:
         """Reproduce the verified runtime's exact current-message generation prefix."""
-        if self.profile_id == "qwen3-thinking-legacy-v1":
-            return render_request(
-                user_input=user_input, system_supplied_context=system_supplied_context
-            )
-        messages = self.messages(
-            user_input=user_input, system_supplied_context=system_supplied_context
-        )
-        return (
-            "".join(
-                f"<|im_start|>{message['role']}\n{message['content']}<|im_end|>\n"
-                for message in messages
-            )
-            + "<|im_start|>assistant\n"
-        )
+        match self.profile_id:
+            case "qwen3-thinking-legacy-v1":
+                return render_request(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
+            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+                messages = self.messages(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
+                return (
+                    "".join(
+                        f"<|im_start|>{message['role']}\n{message['content']}<|im_end|>\n"
+                        for message in messages
+                    )
+                    + "<|im_start|>assistant\n"
+                )
+            case _:
+                assert_never(self.profile_id)
 
     def options(self) -> GenerationOptions | InstructOptions:
         """Return a fresh payload so consumers cannot mutate the pinned bundle."""
-        if self.profile_id == "qwen3-instruct-demo-v1":
-            return {"num_ctx": 8192, "num_predict": 512, "temperature": 0, "seed": 42}
-        return {
-            "num_ctx": self.manifest.context_window,
-            "num_predict": self.manifest.max_output_tokens,
-        }
+        match self.profile_id:
+            case "qwen3-thinking-legacy-v1":
+                return {
+                    "num_ctx": self.manifest.context_window,
+                    "num_predict": self.manifest.max_output_tokens,
+                }
+            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+                return {
+                    "num_ctx": self.manifest.context_window,
+                    "num_predict": self.manifest.max_output_tokens,
+                    "temperature": 0,
+                    "seed": 42,
+                }
+            case _:
+                assert_never(self.profile_id)
 
 
 LEGACY_PROFILE: Final = ModelProfile(
@@ -128,15 +148,25 @@ DEMO_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-instruct-separate-users-origin-v2",
 )
+COMPACT_DEMO_PROFILE: Final = ModelProfile(
+    "qwen3-instruct-compact-demo-v1",
+    InstructManifest(context_window=4096),
+    TOKENIZER_SHA256,
+    DEMO_PROFILE.template_sha256,
+    OLLAMA_VERSION,
+    DEMO_PROFILE.renderer_revision,
+)
 
 
 def get_model_profile(profile_id: str) -> ModelProfile:
-    """Reject anything outside the two audited bundles."""
+    """Reject anything outside the pinned generation bundles."""
     match profile_id:
         case "qwen3-thinking-legacy-v1":
             return LEGACY_PROFILE
         case "qwen3-instruct-demo-v1":
             return DEMO_PROFILE
+        case "qwen3-instruct-compact-demo-v1":
+            return COMPACT_DEMO_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
@@ -144,13 +174,19 @@ def get_model_profile(profile_id: str) -> ModelProfile:
 
 def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
     """Legacy budget overrides remain available to existing controlled tests."""
-    if isinstance(manifest, ModelManifest):
-        return ModelProfile(
-            LEGACY_PROFILE.profile_id,
-            manifest,
-            TOKENIZER_SHA256,
-            TEMPLATE_SHA256,
-            OLLAMA_VERSION,
-            LEGACY_PROFILE.renderer_revision,
-        )
-    return DEMO_PROFILE
+    match manifest:
+        case ModelManifest():
+            return ModelProfile(
+                LEGACY_PROFILE.profile_id,
+                manifest,
+                TOKENIZER_SHA256,
+                TEMPLATE_SHA256,
+                OLLAMA_VERSION,
+                LEGACY_PROFILE.renderer_revision,
+            )
+        case InstructManifest(context_window=4096):
+            return COMPACT_DEMO_PROFILE
+        case InstructManifest():
+            return DEMO_PROFILE
+        case _:
+            assert_never(manifest)

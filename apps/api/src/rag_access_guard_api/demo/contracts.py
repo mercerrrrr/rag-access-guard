@@ -8,6 +8,7 @@ from pydantic import Field, SecretStr
 
 from rag_access_guard_api.demo.plan import SeedPlan
 from rag_access_guard_api.schemas.demo_corpus import CorpusId, CorpusValue
+from rag_access_guard_api.services.model_profiles import ProfileId
 
 
 class DemoRuntime(CorpusValue):
@@ -32,7 +33,7 @@ class DemoConfig(CorpusValue):
     ownership_manifest: Path
     credentials_path: Path
     access_definition: Path
-    model_profile: Literal["qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1"]
+    model_profile: ProfileId
     retrieval_config: Path
     runtime: DemoRuntime
     report_path: Path | None = None

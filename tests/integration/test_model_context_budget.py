@@ -11,7 +11,7 @@ from packages.rag_access_guard.tests.test_history_policy import chunk
 from rag_access_guard import CandidateChunk, Guard, PreparedContext, PriorTurn, SourceRef
 from rag_access_guard.context import bound_context, render_context
 from rag_access_guard_api.adapters import llm
-from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
+from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter, get_model_counter
 from rag_access_guard_api.adapters.ollama import OllamaAdapter
 from rag_access_guard_api.adapters.tokenizer import get_tokenizer
 from rag_access_guard_api.schemas.chat import MessageRequest
@@ -106,11 +106,20 @@ def test_exact_question_token_limit_is_checked_before_reservation(
         assert chat_case.model.inputs[0][0] == question
 
 
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "qwen3-thinking-legacy-v1",
+        "qwen3-instruct-demo-v1",
+        "qwen3-instruct-compact-demo-v1",
+    ],
+)
 def test_real_tokenizer_bounds_complete_server_history(
     chat_case: ChatCase,
     monkeypatch: pytest.MonkeyPatch,
+    profile_id: str,
 ) -> None:
-    counter = ModelTokenCounter(ModelManifest())
+    counter = get_model_counter(profile_id)
     monkeypatch.setattr(llm, "get_token_counter", lambda: counter)
     for number in range(1, 6):
         chat_case.model.body = f"LONG_ANSWER_{number}:" + " x" * 1500
@@ -124,6 +133,12 @@ def test_real_tokenizer_bounds_complete_server_history(
         assert result.turn.state == "available"
         assert {s.document_id for s in result.turn.sources} == {chat_case.document.id}
         assert counter.count(chat_case.model.inputs[-1][1]) <= 5000
+        sent_question, sent_context = chat_case.model.inputs[-1]
+        assert (
+            counter.count_request(user_input=sent_question, system_supplied_context=sent_context)
+            + counter.manifest.max_output_tokens
+            <= counter.manifest.context_window
+        )
     user, context = chat_case.model.inputs[-1]
     assert user == "CURRENT_5"
     assert "CURRENT_1" not in context

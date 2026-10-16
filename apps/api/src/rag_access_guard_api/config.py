@@ -9,6 +9,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, PostgresDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from rag_access_guard_api.services.model_profiles import ProfileId
+
 DEFAULT_DATABASE_URL: Final[PostgresDsn] = PostgresDsn(
     "postgresql+psycopg://rag_guard:local-dev-only@127.0.0.1:55432/rag_access_guard"
 )
@@ -38,9 +40,7 @@ class Settings(BaseSettings):
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
-    model_profile: Literal["qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1"] = (
-        "qwen3-thinking-legacy-v1"
-    )
+    model_profile: ProfileId = "qwen3-thinking-legacy-v1"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_supervisor_config_path: Path | None = None
     generation_timeout_seconds: int = Field(default=GENERATION_TIMEOUT_SECONDS, gt=0, le=60)
