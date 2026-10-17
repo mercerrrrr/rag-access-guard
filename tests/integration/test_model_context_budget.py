@@ -11,11 +11,12 @@ from packages.rag_access_guard.tests.test_history_policy import chunk
 from rag_access_guard import CandidateChunk, Guard, PreparedContext, PriorTurn, SourceRef
 from rag_access_guard.context import bound_context, render_context
 from rag_access_guard_api.adapters import llm
-from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter, get_model_counter
+from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.adapters.ollama import OllamaAdapter
 from rag_access_guard_api.adapters.tokenizer import get_tokenizer
 from rag_access_guard_api.schemas.chat import MessageRequest
 from rag_access_guard_api.services.model_manifest import ModelManifest
+from rag_access_guard_api.services.model_profiles import get_model_profile
 from tests.support.chat import ChatHttp
 from tests.support.chat_generation import ChatCase
 
@@ -112,6 +113,7 @@ def test_exact_question_token_limit_is_checked_before_reservation(
         "qwen3-thinking-legacy-v1",
         "qwen3-instruct-demo-v1",
         "qwen3-instruct-compact-demo-v1",
+        "qwen25-instruct-small-demo-v1",
     ],
 )
 def test_real_tokenizer_bounds_complete_server_history(
@@ -119,7 +121,11 @@ def test_real_tokenizer_bounds_complete_server_history(
     monkeypatch: pytest.MonkeyPatch,
     profile_id: str,
 ) -> None:
-    counter = get_model_counter(profile_id)
+    profile = get_model_profile(profile_id)
+    counter = ModelTokenCounter(
+        profile.manifest,
+        Path(".cache/qwen3") / profile.manifest.tokenizer_revision / "tokenizer.json",
+    )
     monkeypatch.setattr(llm, "get_token_counter", lambda: counter)
     for number in range(1, 6):
         chat_case.model.body = f"LONG_ANSWER_{number}:" + " x" * 1500

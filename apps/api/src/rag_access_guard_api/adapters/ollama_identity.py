@@ -1,15 +1,22 @@
 """Verify the local runtime and full model identity before serving generation."""
 
 from hashlib import sha256
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, assert_never
 
 import anyio
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from rag_access_guard_api.adapters.ollama_http import bounded_request
+from rag_access_guard_api.adapters.qwen25_identity import SmallModelMetadata
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
-from rag_access_guard_api.services.model_profiles import GenerationManifest, profile_for_manifest
+from rag_access_guard_api.services.model_manifest import ModelManifest
+from rag_access_guard_api.services.model_profiles import (
+    GenerationManifest,
+    InstructManifest,
+    profile_for_manifest,
+)
+from rag_access_guard_api.services.small_model_manifest import SmallInstructManifest
 
 
 class RuntimeVersion(BaseModel):
@@ -61,12 +68,22 @@ async def verify_model(client: httpx2.AsyncClient, manifest: GenerationManifest)
                 await bounded_request(client, "/api/version")
             )
             models = InstalledModels.model_validate_json(await bounded_request(client, "/api/tags"))
-            metadata = ModelMetadata.model_validate_json(
-                await bounded_request(client, "/api/show", payload={"model": manifest.model_name})
-            )
+            raw = await bounded_request(client, "/api/show", payload={"model": manifest.model_name})
+            match manifest:
+                case SmallInstructManifest():
+                    metadata = SmallModelMetadata.model_validate_json(raw)
+                    valid_system = (
+                        sha256(metadata.system.encode()).hexdigest() == manifest.model_system_sha256
+                    )
+                case ModelManifest() | InstructManifest():
+                    metadata = ModelMetadata.model_validate_json(raw)
+                    valid_system = True
+                case _:
+                    assert_never(manifest)
             matches = [m for m in models.models if m.name == manifest.model_name]
             if (
                 version.version != profile.runtime_version
+                or not valid_system
                 or len(matches) != 1
                 or matches[0].digest != manifest.model_digest
                 or sha256(metadata.template.encode()).hexdigest() != profile.template_sha256

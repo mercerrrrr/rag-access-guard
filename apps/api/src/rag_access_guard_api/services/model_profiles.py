@@ -16,9 +16,17 @@ from rag_access_guard_api.services.model_manifest import (
     TOKENIZER_SHA256,
     ModelManifest,
 )
+from rag_access_guard_api.services.small_model_manifest import (
+    SMALL_TEMPLATE_SHA256,
+    SMALL_TOKENIZER_SHA256,
+    SmallInstructManifest,
+)
 
 type ProfileId = Literal[
-    "qwen3-thinking-legacy-v1", "qwen3-instruct-demo-v1", "qwen3-instruct-compact-demo-v1"
+    "qwen3-thinking-legacy-v1",
+    "qwen3-instruct-demo-v1",
+    "qwen3-instruct-compact-demo-v1",
+    "qwen25-instruct-small-demo-v1",
 ]
 
 
@@ -39,7 +47,7 @@ class InstructManifest(BaseModel):
     prompt_revision: Literal["rag-instruct-ru-origin-v2"] = "rag-instruct-ru-origin-v2"
 
 
-type GenerationManifest = ModelManifest | InstructManifest
+type GenerationManifest = ModelManifest | InstructManifest | SmallInstructManifest
 
 
 class GenerationOptions(TypedDict):
@@ -86,7 +94,11 @@ class ModelProfile:
         match self.profile_id:
             case "qwen3-thinking-legacy-v1":
                 pass
-            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+            case (
+                "qwen3-instruct-demo-v1"
+                | "qwen3-instruct-compact-demo-v1"
+                | "qwen25-instruct-small-demo-v1"
+            ):
                 messages[0] = {"role": "system", "content": INSTRUCT_SYSTEM}
             case _:
                 assert_never(self.profile_id)
@@ -110,6 +122,15 @@ class ModelProfile:
                     )
                     + "<|im_start|>assistant\n"
                 )
+            case "qwen25-instruct-small-demo-v1":
+                messages = self.messages(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
+                return (
+                    f"<|im_start|>system\n{messages[0]['content']}<|im_end|>\n"
+                    f"<|im_start|>user\n{messages[1]['content']}\n\n{messages[2]['content']}<|im_end|>\n"
+                    "<|im_start|>assistant\n"
+                )
             case _:
                 assert_never(self.profile_id)
 
@@ -121,7 +142,11 @@ class ModelProfile:
                     "num_ctx": self.manifest.context_window,
                     "num_predict": self.manifest.max_output_tokens,
                 }
-            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+            case (
+                "qwen3-instruct-demo-v1"
+                | "qwen3-instruct-compact-demo-v1"
+                | "qwen25-instruct-small-demo-v1"
+            ):
                 return {
                     "num_ctx": self.manifest.context_window,
                     "num_predict": self.manifest.max_output_tokens,
@@ -156,6 +181,14 @@ COMPACT_DEMO_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     DEMO_PROFILE.renderer_revision,
 )
+SMALL_DEMO_PROFILE: Final = ModelProfile(
+    "qwen25-instruct-small-demo-v1",
+    SmallInstructManifest(),
+    SMALL_TOKENIZER_SHA256,
+    SMALL_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    "ollama-qwen25-collated-users-origin-v1",
+)
 
 
 def get_model_profile(profile_id: str) -> ModelProfile:
@@ -167,6 +200,8 @@ def get_model_profile(profile_id: str) -> ModelProfile:
             return DEMO_PROFILE
         case "qwen3-instruct-compact-demo-v1":
             return COMPACT_DEMO_PROFILE
+        case "qwen25-instruct-small-demo-v1":
+            return SMALL_DEMO_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
@@ -188,5 +223,7 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             return COMPACT_DEMO_PROFILE
         case InstructManifest():
             return DEMO_PROFILE
+        case SmallInstructManifest():
+            return SMALL_DEMO_PROFILE
         case _:
             assert_never(manifest)

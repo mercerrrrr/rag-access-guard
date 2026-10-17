@@ -1,19 +1,29 @@
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
 from rag_access_guard_api.adapters import llm
-from rag_access_guard_api.adapters.model_tokens import get_model_counter
+from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.schemas.chat import AvailableTurn, MessageRequest
+from rag_access_guard_api.services.model_profiles import get_model_profile
 from tests.support.chat_generation import ChatCase
 
 
+@pytest.mark.parametrize(
+    "profile_id", ["qwen3-instruct-compact-demo-v1", "qwen25-instruct-small-demo-v1"]
+)
 def test_compact_chat_rechecks_stored_answer_and_source_after_revocation(
     chat_case: ChatCase,
     monkeypatch: pytest.MonkeyPatch,
+    profile_id: str,
 ) -> None:
-    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", "qwen3-instruct-compact-demo-v1")
-    counter = get_model_counter()
+    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", profile_id)
+    profile = get_model_profile(profile_id)
+    counter = ModelTokenCounter(
+        profile.manifest,
+        Path(".cache/qwen3") / profile.manifest.tokenizer_revision / "tokenizer.json",
+    )
     monkeypatch.setattr(llm, "get_token_counter", lambda: counter)
     chat_case.model.body = "PROTECTED_COMPACT_ANSWER"
     first = chat_case.send(
@@ -36,12 +46,20 @@ def test_compact_chat_rechecks_stored_answer_and_source_after_revocation(
     assert "PROTECTED_COMPACT_ANSWER" not in stored.model_dump_json()
 
 
+@pytest.mark.parametrize(
+    "profile_id", ["qwen3-instruct-compact-demo-v1", "qwen25-instruct-small-demo-v1"]
+)
 def test_compact_chat_does_not_reuse_revoked_history_for_followup(
     chat_case: ChatCase,
     monkeypatch: pytest.MonkeyPatch,
+    profile_id: str,
 ) -> None:
-    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", "qwen3-instruct-compact-demo-v1")
-    counter = get_model_counter()
+    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", profile_id)
+    profile = get_model_profile(profile_id)
+    counter = ModelTokenCounter(
+        profile.manifest,
+        Path(".cache/qwen3") / profile.manifest.tokenizer_revision / "tokenizer.json",
+    )
     monkeypatch.setattr(llm, "get_token_counter", lambda: counter)
     chat_case.model.body = "PROTECTED_COMPACT_ANSWER"
     first = chat_case.send(
