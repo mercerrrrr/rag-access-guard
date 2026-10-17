@@ -18,6 +18,15 @@ from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.adapters.policy import PostgresPolicyReader
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.origin import DocumentOrigin
+from rag_access_guard_api.schemas.origin_labels import (
+    OFFICIAL_LABEL as OFFICIAL_LABEL,  # noqa: PLC0414 -- retain the existing public import path.
+)
+from rag_access_guard_api.schemas.origin_labels import (
+    SYNTHETIC_LABEL as SYNTHETIC_LABEL,  # noqa: PLC0414 -- retain the existing public import path.
+)
+from rag_access_guard_api.schemas.origin_labels import (
+    UPLOAD_LABEL as UPLOAD_LABEL,  # noqa: PLC0414 -- retain the existing public import path.
+)
 from rag_access_guard_api.services.model_profiles import get_model_profile
 from rag_access_guard_api.services.origin import (
     InvalidOriginError,
@@ -26,11 +35,6 @@ from rag_access_guard_api.services.origin import (
 )
 from rag_access_guard_api.services.security import ReadUoW
 
-SYNTHETIC_LABEL: Final = "Учебный пример; вымышленный материал, не официальный документ."
-OFFICIAL_LABEL: Final = (
-    "Открытый источник; происхождение не подтверждает текущую юридическую действительность."
-)
-UPLOAD_LABEL: Final = "Пользовательский материал; достоверность издателя не подтверждена."
 MAX_CONTEXT_TOKENS: Final = 5000
 
 

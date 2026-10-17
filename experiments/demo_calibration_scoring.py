@@ -77,3 +77,15 @@ def select_case_threshold(grid: tuple[DemoCaseThresholdScore, ...]) -> DemoCaseT
             r.threshold,
         ),
     )
+
+
+def select_recall_threshold(grid: tuple[DemoCaseThresholdScore, ...]) -> DemoCaseThresholdScore:
+    """Preserve answer evidence; missing facts are judged in the generated answer."""
+    return max(
+        grid,
+        key=lambda row: (
+            Fraction(row.sufficient_answerable, row.answerable_count),
+            -row.retrieved_chunks,
+            row.threshold,
+        ),
+    )

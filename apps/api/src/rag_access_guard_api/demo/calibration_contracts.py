@@ -7,6 +7,10 @@ from rag_access_guard_api.demo.evaluation_contracts import DemoEvaluationCase
 from rag_access_guard_api.schemas.demo_corpus import CorpusValue, Sha256
 from rag_access_guard_api.schemas.retrieval_config import RetrievalConfig
 
+type DemoCalibrationObjective = Literal[
+    "case-balanced-adequacy-top5-v1", "answerable-recall-top5-v1"
+]
+
 
 class DemoChunkScore(CorpusValue):
     """A visible canonical chunk score, not a guessed semantic label."""
@@ -78,6 +82,19 @@ class DemoCaseCalibrationReport(CorpusValue):
     """Version two keeps the previous micro-F1 report interpretable without migration."""
 
     schema_version: Literal[2] = 2
+    dataset_sha256: Sha256
+    calibration_cases_sha256: Sha256
+    corpus_sha256: Sha256
+    config: RetrievalConfig
+    chosen: DemoCaseThresholdScore
+    grid: tuple[DemoCaseThresholdScore, ...]
+
+
+class DemoRecallCalibrationReport(CorpusValue):
+    """Recall-first selection keeps empty-context counts descriptive, not an answer oracle."""
+
+    schema_version: Literal[3] = 3
+    objective: Literal["answerable-recall-top5-v1"] = "answerable-recall-top5-v1"
     dataset_sha256: Sha256
     calibration_cases_sha256: Sha256
     corpus_sha256: Sha256

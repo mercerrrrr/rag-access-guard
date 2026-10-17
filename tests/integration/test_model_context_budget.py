@@ -114,6 +114,7 @@ def test_exact_question_token_limit_is_checked_before_reservation(
         "qwen3-instruct-demo-v1",
         "qwen3-instruct-compact-demo-v1",
         "qwen25-instruct-small-demo-v1",
+        "qwen35-extractive-demo-v1",
     ],
 )
 def test_real_tokenizer_bounds_complete_server_history(

@@ -109,6 +109,7 @@ jobs:
           bash scripts/provision-model-tokenizer.sh
           bash scripts/provision-model-tokenizer.sh --profile qwen3-instruct-demo-v1
           bash scripts/provision-model-tokenizer.sh --profile qwen25-instruct-small-demo-v1
+          bash scripts/provision-model-tokenizer.sh --profile qwen35-extractive-demo-v1
 
       - name: Start PostgreSQL
         run: docker compose up --detach --wait postgres

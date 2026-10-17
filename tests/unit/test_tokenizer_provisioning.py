@@ -4,15 +4,23 @@ import subprocess
 from hashlib import sha256
 from pathlib import Path
 
+import pytest
 
+
+@pytest.mark.parametrize(
+    ("profile_id", "model_family"),
+    [("qwen25-instruct-small-demo-v1", "qwen2.5"), ("qwen35-extractive-demo-v1", "qwen3.5")],
+)
 def test_tokenizer_provisioning_normalizes_windows_metadata_and_selects_model_family(
     tmp_path: Path,
+    profile_id: str,
+    model_family: str,
 ) -> None:
     script = Path("scripts/provision-model-tokenizer.sh").resolve()
     digest = sha256(b"fixture").hexdigest()
     uv = tmp_path / "uv"
     metadata_line = (
-        f"printf '%s\\r\\n' revision Qwen/Fixture {digest} " + f"{digest} qwen2.5:fixture"
+        f"printf '%s\\r\\n' revision Qwen/Fixture {digest} " + f"{digest} {model_family}:fixture"
     )
     _ = uv.write_text(
         f"#!/usr/bin/env bash\n{metadata_line}\n",
@@ -43,7 +51,7 @@ done
     assert bash is not None
 
     result = subprocess.run(  # noqa: S603 -- fixed tracked script and isolated fixture executables, no shell.
-        [bash, script.as_posix(), "--profile", "qwen25-instruct-small-demo-v1"],
+        [bash, script.as_posix(), "--profile", profile_id],
         cwd=tmp_path,
         env=environment,
         capture_output=True,
@@ -55,5 +63,5 @@ done
     assert (tmp_path / ".cache/qwen3/revision/tokenizer.json").read_bytes() == b"fixture"
     assert urls.read_text(encoding="utf-8").splitlines() == [
         "https://huggingface.co/Qwen/Fixture/resolve/revision/tokenizer.json",
-        f"https://registry.ollama.ai/v2/library/qwen2.5/blobs/sha256:{digest}",
+        f"https://registry.ollama.ai/v2/library/{model_family}/blobs/sha256:{digest}",
     ]

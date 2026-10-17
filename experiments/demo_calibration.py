@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Final
+from typing import Final, assert_never
 from uuid import UUID
 
 import httpx2
@@ -10,7 +10,11 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from experiments.demo_admission import DemoAdmission
-from experiments.demo_calibration_scoring import score_case_thresholds, select_case_threshold
+from experiments.demo_calibration_scoring import (
+    score_case_thresholds,
+    select_case_threshold,
+    select_recall_threshold,
+)
 from experiments.demo_http import demo_client
 from experiments.demo_inputs import DemoInputs, calibration_cases_hash
 from experiments.demo_run_contracts import DemoRunPlan, DemoUnit
@@ -19,9 +23,11 @@ from rag_access_guard_api.adapters.embeddings import MODEL_ID, get_embedding_ada
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION, TOKENIZER_IDENTITY
 from rag_access_guard_api.demo.calibration import actor_top_five
 from rag_access_guard_api.demo.calibration_contracts import (
+    DemoCalibrationObjective,
     DemoCalibrationResult,
     DemoCaseCalibrationReport,
     DemoChunkScore,
+    DemoRecallCalibrationReport,
 )
 from rag_access_guard_api.demo.evaluation import DemoDatasetError
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
@@ -123,8 +129,11 @@ class DemoCalibration:
 
 
 def calibration_report(
-    inputs: DemoInputs, rows: tuple[DemoCalibrationResult, ...]
-) -> DemoCaseCalibrationReport:
+    inputs: DemoInputs,
+    rows: tuple[DemoCalibrationResult, ...],
+    *,
+    objective: DemoCalibrationObjective = "answerable-recall-top5-v1",
+) -> DemoCaseCalibrationReport | DemoRecallCalibrationReport:
     """Persist grid and computed RetrievalConfig privately, never change the selected default."""
     cases = {c.id: c for c in inputs.dataset.cases if c.split == "calibration"}
     if (
@@ -138,7 +147,15 @@ def calibration_report(
     ):
         raise DemoDatasetError(code="incomplete_calibration")
     grid = score_case_thresholds(rows)
-    chosen = select_case_threshold(grid)
+    match objective:
+        case "case-balanced-adequacy-top5-v1":
+            chosen = select_case_threshold(grid)
+            report_model = DemoCaseCalibrationReport
+        case "answerable-recall-top5-v1":
+            chosen = select_recall_threshold(grid)
+            report_model = DemoRecallCalibrationReport
+        case _:
+            assert_never(objective)
     config = RetrievalConfig(
         threshold=chosen.threshold,
         no_results=chosen.threshold > 1,
@@ -148,13 +165,13 @@ def calibration_report(
         model_revision=MODEL_REVISION,
         tokenizer_revision=TOKENIZER_IDENTITY,
         chunker_revision=CHUNKER_REVISION,
-        scorer_revision="case-balanced-adequacy-top5-v1",
+        scorer_revision=objective,
         similarity_revision="pgvector-0.8.6-vector-cosine-v1",
         config_sha256="0" * 64,
     )
     config = config.model_copy(update={"config_sha256": config.computed_hash()})
     config.require_compatible()
-    return DemoCaseCalibrationReport(
+    return report_model(
         dataset_sha256=inputs.dataset.dataset_sha256,
         calibration_cases_sha256=calibration_cases_hash(inputs.dataset),
         corpus_sha256=inputs.dataset.corpus_sha256,

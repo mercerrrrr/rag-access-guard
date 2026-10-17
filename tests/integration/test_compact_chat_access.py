@@ -11,7 +11,12 @@ from tests.support.chat_generation import ChatCase
 
 
 @pytest.mark.parametrize(
-    "profile_id", ["qwen3-instruct-compact-demo-v1", "qwen25-instruct-small-demo-v1"]
+    "profile_id",
+    [
+        "qwen3-instruct-compact-demo-v1",
+        "qwen25-instruct-small-demo-v1",
+        "qwen35-extractive-demo-v1",
+    ],
 )
 def test_compact_chat_rechecks_stored_answer_and_source_after_revocation(
     chat_case: ChatCase,
@@ -47,7 +52,12 @@ def test_compact_chat_rechecks_stored_answer_and_source_after_revocation(
 
 
 @pytest.mark.parametrize(
-    "profile_id", ["qwen3-instruct-compact-demo-v1", "qwen25-instruct-small-demo-v1"]
+    "profile_id",
+    [
+        "qwen3-instruct-compact-demo-v1",
+        "qwen25-instruct-small-demo-v1",
+        "qwen35-extractive-demo-v1",
+    ],
 )
 def test_compact_chat_does_not_reuse_revoked_history_for_followup(
     chat_case: ChatCase,

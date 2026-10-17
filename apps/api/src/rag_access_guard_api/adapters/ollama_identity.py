@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from rag_access_guard_api.adapters.ollama_http import bounded_request
 from rag_access_guard_api.adapters.qwen25_identity import SmallModelMetadata
+from rag_access_guard_api.adapters.qwen35_identity import ExtractiveModelMetadata
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
+from rag_access_guard_api.services.extractive_manifest import ExtractiveManifest
 from rag_access_guard_api.services.model_manifest import ModelManifest
 from rag_access_guard_api.services.model_profiles import (
     GenerationManifest,
@@ -70,6 +72,9 @@ async def verify_model(client: httpx2.AsyncClient, manifest: GenerationManifest)
             models = InstalledModels.model_validate_json(await bounded_request(client, "/api/tags"))
             raw = await bounded_request(client, "/api/show", payload={"model": manifest.model_name})
             match manifest:
+                case ExtractiveManifest():
+                    metadata = ExtractiveModelMetadata.model_validate_json(raw)
+                    valid_system = True
                 case SmallInstructManifest():
                     metadata = SmallModelMetadata.model_validate_json(raw)
                     valid_system = (

@@ -10,6 +10,15 @@ from rag_access_guard_api.adapters.model_messages import (
     build_messages,
     render_request,
 )
+from rag_access_guard_api.services.evidence_selection import (
+    extractive_messages,
+    render_extractive_request,
+)
+from rag_access_guard_api.services.extractive_manifest import (
+    EXTRACTIVE_TEMPLATE_SHA256,
+    EXTRACTIVE_TOKENIZER_SHA256,
+    ExtractiveManifest,
+)
 from rag_access_guard_api.services.model_manifest import (
     OLLAMA_VERSION,
     TEMPLATE_SHA256,
@@ -27,6 +36,7 @@ type ProfileId = Literal[
     "qwen3-instruct-demo-v1",
     "qwen3-instruct-compact-demo-v1",
     "qwen25-instruct-small-demo-v1",
+    "qwen35-extractive-demo-v1",
 ]
 
 
@@ -47,7 +57,9 @@ class InstructManifest(BaseModel):
     prompt_revision: Literal["rag-instruct-ru-origin-v2"] = "rag-instruct-ru-origin-v2"
 
 
-type GenerationManifest = ModelManifest | InstructManifest | SmallInstructManifest
+type GenerationManifest = (
+    ModelManifest | InstructManifest | SmallInstructManifest | ExtractiveManifest
+)
 
 
 class GenerationOptions(TypedDict):
@@ -87,11 +99,15 @@ class ModelProfile:
     renderer_revision: str
 
     def messages(self, *, user_input: str, system_supplied_context: str) -> list[ModelMessage]:
-        """Keep the two user sections separate on the wire for every profile."""
+        """Keep managed context distinguishable from arbitrary user input."""
         messages = build_messages(
             user_input=user_input, system_supplied_context=system_supplied_context
         )
         match self.profile_id:
+            case "qwen35-extractive-demo-v1":
+                return extractive_messages(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
             case "qwen3-thinking-legacy-v1":
                 pass
             case (
@@ -107,6 +123,12 @@ class ModelProfile:
     def render(self, *, user_input: str, system_supplied_context: str) -> str:
         """Reproduce the verified runtime's exact current-message generation prefix."""
         match self.profile_id:
+            case "qwen35-extractive-demo-v1":
+                return render_extractive_request(
+                    self.messages(
+                        user_input=user_input, system_supplied_context=system_supplied_context
+                    )
+                )
             case "qwen3-thinking-legacy-v1":
                 return render_request(
                     user_input=user_input, system_supplied_context=system_supplied_context
@@ -146,6 +168,7 @@ class ModelProfile:
                 "qwen3-instruct-demo-v1"
                 | "qwen3-instruct-compact-demo-v1"
                 | "qwen25-instruct-small-demo-v1"
+                | "qwen35-extractive-demo-v1"
             ):
                 return {
                     "num_ctx": self.manifest.context_window,
@@ -189,6 +212,14 @@ SMALL_DEMO_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-qwen25-collated-users-origin-v1",
 )
+EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen35-extractive-demo-v1",
+    ExtractiveManifest(),
+    EXTRACTIVE_TOKENIZER_SHA256,
+    EXTRACTIVE_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    "ollama-qwen35-excerpts-ru-v1",
+)
 
 
 def get_model_profile(profile_id: str) -> ModelProfile:
@@ -202,6 +233,8 @@ def get_model_profile(profile_id: str) -> ModelProfile:
             return COMPACT_DEMO_PROFILE
         case "qwen25-instruct-small-demo-v1":
             return SMALL_DEMO_PROFILE
+        case "qwen35-extractive-demo-v1":
+            return EXTRACTIVE_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
@@ -225,5 +258,7 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             return DEMO_PROFILE
         case SmallInstructManifest():
             return SMALL_DEMO_PROFILE
+        case ExtractiveManifest():
+            return EXTRACTIVE_PROFILE
         case _:
             assert_never(manifest)

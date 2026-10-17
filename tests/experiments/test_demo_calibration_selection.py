@@ -60,7 +60,9 @@ def test_selection_prefers_complete_case_context_over_chunk_micro_f1(
 ) -> None:
     rows = scored_rows(calibration_inputs)
 
-    report = calibration_report(calibration_inputs, rows)
+    report = calibration_report(
+        calibration_inputs, rows, objective="case-balanced-adequacy-top5-v1"
+    )
 
     assert report.config.threshold == 0.7
     assert report.config.scorer_revision == "case-balanced-adequacy-top5-v1"
@@ -70,7 +72,11 @@ def test_new_config_loads_and_preserves_integrity(
     calibration_inputs: DemoInputs,
     tmp_path: Path,
 ) -> None:
-    report = calibration_report(calibration_inputs, scored_rows(calibration_inputs))
+    report = calibration_report(
+        calibration_inputs,
+        scored_rows(calibration_inputs),
+        objective="case-balanced-adequacy-top5-v1",
+    )
     path = tmp_path / "config.json"
     _ = path.write_text(report.config.model_dump_json(), encoding="utf-8")
 

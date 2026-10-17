@@ -1,7 +1,7 @@
 """Bounded local model transport."""
 
 from contextlib import nullcontext
-from typing import Final
+from typing import TYPE_CHECKING, Final, assert_never
 
 import anyio
 import httpx2
@@ -22,15 +22,24 @@ from rag_access_guard_api.adapters.ollama_http import (
     create_client,
 )
 from rag_access_guard_api.adapters.ollama_identity import verify_model
-from rag_access_guard_api.adapters.ollama_response import decode_answer
+from rag_access_guard_api.adapters.ollama_response import decode_answer, require_plain_answer
 from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor
 from rag_access_guard_api.config import INFERENCE_RECOVERY_SECONDS
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
+from rag_access_guard_api.services.evidence_context import evidence_passages
+from rag_access_guard_api.services.evidence_selection import render_selection, selection_schema
+from rag_access_guard_api.services.extractive_manifest import ExtractiveManifest
+from rag_access_guard_api.services.model_manifest import ModelManifest
 from rag_access_guard_api.services.model_profiles import (
     GenerationManifest,
+    InstructManifest,
     ModelProfile,
     profile_for_manifest,
 )
+from rag_access_guard_api.services.small_model_manifest import SmallInstructManifest
+
+if TYPE_CHECKING:
+    from rag_access_guard_api.services.evidence_context import EvidencePassage
 
 MAX_INPUT_BYTES: Final = 16384
 MAX_INPUT_TOKENS: Final = 1024
@@ -95,9 +104,9 @@ class OllamaAdapter:
             self._client, user_input=user_input, system_supplied_context=system_supplied_context
         )
 
-    async def _generate(
-        self, client: httpx2.AsyncClient, *, user_input: str, system_supplied_context: str
-    ) -> str:
+    def _request_payload(
+        self, *, user_input: str, system_supplied_context: str
+    ) -> "tuple[dict[str, JsonValue], tuple[EvidencePassage, ...] | None]":
         if (
             len(user_input.encode("utf-8")) > MAX_INPUT_BYTES
             or self.counter.count(user_input) > MAX_INPUT_TOKENS
@@ -109,7 +118,34 @@ class OllamaAdapter:
             > self.manifest.context_window
         ):
             raise LLMUnavailableError
+        payload: dict[str, JsonValue] = {
+            "model": self.manifest.model_name,
+            "stream": False,
+            "messages": [
+                {"role": message["role"], "content": message["content"]}
+                for message in self.profile.messages(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
+            ],
+            "options": TypeAdapter[JsonValue](JsonValue).validate_python(self.profile.options()),
+        }
+        match self.manifest:
+            case ExtractiveManifest():
+                entries = evidence_passages(system_supplied_context)
+                payload.update(think=False, format=selection_schema(entries))
+            case ModelManifest() | InstructManifest() | SmallInstructManifest():
+                entries = None
+            case _:
+                assert_never(self.manifest)
+        return payload, entries
+
+    async def _generate(
+        self, client: httpx2.AsyncClient, *, user_input: str, system_supplied_context: str
+    ) -> str:
         dispatch = RequestDispatch()
+        payload, entries = self._request_payload(
+            user_input=user_input, system_supplied_context=system_supplied_context
+        )
         try:
             with anyio.fail_after(TIMEOUT_SECONDS):
                 claim = (
@@ -121,22 +157,11 @@ class OllamaAdapter:
                     client,
                     "/api/chat",
                     dispatch=dispatch,
-                    payload={
-                        "model": self.manifest.model_name,
-                        "stream": False,
-                        "messages": [
-                            {"role": message["role"], "content": message["content"]}
-                            for message in self.profile.messages(
-                                user_input=user_input,
-                                system_supplied_context=system_supplied_context,
-                            )
-                        ],
-                        "options": TypeAdapter[JsonValue](JsonValue).validate_python(
-                            self.profile.options()
-                        ),
-                    },
+                    payload=payload,
                 )
                 answer = decode_answer(raw)
+                if entries is not None:
+                    answer = require_plain_answer(render_selection(answer, entries, self.counter))
                 if self._supervisor is not None and claim is not None:
                     await run_sync(self._supervisor.complete_inference, claim)
                 return answer

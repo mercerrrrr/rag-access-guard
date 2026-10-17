@@ -25,7 +25,8 @@ curl --fail --location --retry 3 --connect-timeout 10 --max-time 180 \
 printf '%s  %s\n' \
   "${bundle[2]}" \
   "$destination" | sha256sum --check
-if [[ "$profile" == qwen3-thinking-legacy-v1 || "$profile" == qwen25-instruct-small-demo-v1 ]]; then
+if [[ "$profile" == qwen3-thinking-legacy-v1 || "$profile" == qwen25-instruct-small-demo-v1 || \
+      "$profile" == qwen35-extractive-demo-v1 ]]; then
   template="$(dirname "$destination")/template.txt"
   curl --fail --location --retry 3 --connect-timeout 10 --max-time 60 \
     "https://registry.ollama.ai/v2/library/${bundle[4]%%:*}/blobs/sha256:${bundle[3]}" \

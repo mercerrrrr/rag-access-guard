@@ -32,15 +32,16 @@ class Reply(BaseModel):
     done_reason: Literal["stop"] = "stop"
 
 
+def require_plain_answer(content: str) -> str:
+    """Apply the same text contract to model content and host-rendered excerpts."""
+    if not content.strip() or "\x00" in content or len(content.encode("utf-8")) > MAX_ANSWER_BYTES:
+        raise LLMUnavailableError
+    return content
+
+
 def decode_answer(raw: bytes) -> str:
     """Project only final content; metadata and reasoning are discarded."""
     reply = Reply.model_validate_json(raw)
-    content = reply.message.content
-    if (
-        not reply.done
-        or not content.strip()
-        or "\x00" in content
-        or len(content.encode("utf-8")) > MAX_ANSWER_BYTES
-    ):
+    if not reply.done:
         raise LLMUnavailableError
-    return content
+    return require_plain_answer(reply.message.content)
