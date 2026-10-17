@@ -262,6 +262,7 @@ class OllamaSupervisor:
             OLLAMA_HOST=self.config.host,
             OLLAMA_NUM_PARALLEL="1",
             OLLAMA_MAX_QUEUE="1",
+            OLLAMA_KEEP_ALIVE="0",
             OLLAMA_MODELS=str(self.config.model_store_path),
             LLAMA_ARG_CACHE_RAM="0",
         )

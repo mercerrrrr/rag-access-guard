@@ -34,6 +34,7 @@ def record(directory: Path, event: str) -> None:
                 {
                     "event": event,
                     "cache_ram": os.environ.get("LLAMA_ARG_CACHE_RAM"),
+                    "keep_alive": os.environ.get("OLLAMA_KEEP_ALIVE"),
                     "pid": process.pid,
                     "created": process.create_time(),
                     "executable": process.exe(),

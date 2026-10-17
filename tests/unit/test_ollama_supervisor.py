@@ -349,8 +349,10 @@ def test_owned_engine_disables_cross_request_ram_cache_without_mutating_parent(
 ) -> None:
     if inherited is None:
         monkeypatch.delenv("LLAMA_ARG_CACHE_RAM", raising=False)
+        monkeypatch.delenv("OLLAMA_KEEP_ALIVE", raising=False)
     else:
         monkeypatch.setenv("LLAMA_ARG_CACHE_RAM", inherited)
+        monkeypatch.setenv("OLLAMA_KEEP_ALIVE", "10m")
     owned_case.supervisor.start()
     wait_file(owned_case.directory / "grandchild")
     observation_schema = TypeAdapter(dict[str, str | int | float | None])
@@ -361,7 +363,9 @@ def test_owned_engine_disables_cross_request_ram_cache_without_mutating_parent(
     processes = [row for row in observations if row["event"] in {"root", "runner", "grandchild"}]
     assert {row["event"] for row in processes} == {"root", "runner", "grandchild"}
     assert {row["cache_ram"] for row in processes} == {"0"}
+    assert {row["keep_alive"] for row in processes} == {"0"}
     assert os.environ.get("LLAMA_ARG_CACHE_RAM") == inherited
+    assert os.environ.get("OLLAMA_KEEP_ALIVE") == ("10m" if inherited is not None else None)
 
 
 @pytest.fixture
