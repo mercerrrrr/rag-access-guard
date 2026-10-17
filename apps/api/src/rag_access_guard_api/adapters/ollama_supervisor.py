@@ -231,9 +231,11 @@ class OllamaSupervisor:
                 _ = lock.seek(0)
                 msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
 
-    def start(self) -> None:
+    def start(self, *, require_stopped: bool = False) -> None:
         """Create suspended, contain before execution, persist identity, then resume."""
         with self._coordination():
+            if require_stopped and self.config.state_path.exists():
+                raise InferenceUnavailableError
             self._start()
 
     def _start(self) -> None:

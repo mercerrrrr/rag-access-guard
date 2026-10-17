@@ -28,7 +28,10 @@ from rag_access_guard_api.config import INFERENCE_RECOVERY_SECONDS
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
 from rag_access_guard_api.services.evidence_context import evidence_passages
 from rag_access_guard_api.services.evidence_selection import render_selection, selection_schema
-from rag_access_guard_api.services.extractive_manifest import ExtractiveManifest
+from rag_access_guard_api.services.extractive_manifest import (
+    ExtractiveManifest,
+    TextExtractiveManifest,
+)
 from rag_access_guard_api.services.model_manifest import ModelManifest
 from rag_access_guard_api.services.model_profiles import (
     GenerationManifest,
@@ -130,7 +133,7 @@ class OllamaAdapter:
             "options": TypeAdapter[JsonValue](JsonValue).validate_python(self.profile.options()),
         }
         match self.manifest:
-            case ExtractiveManifest():
+            case ExtractiveManifest() | TextExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
                 payload.update(think=False, format=selection_schema(entries))
             case ModelManifest() | InstructManifest() | SmallInstructManifest():

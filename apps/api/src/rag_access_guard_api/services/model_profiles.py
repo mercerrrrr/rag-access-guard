@@ -18,6 +18,7 @@ from rag_access_guard_api.services.extractive_manifest import (
     EXTRACTIVE_TEMPLATE_SHA256,
     EXTRACTIVE_TOKENIZER_SHA256,
     ExtractiveManifest,
+    TextExtractiveManifest,
 )
 from rag_access_guard_api.services.model_manifest import (
     OLLAMA_VERSION,
@@ -37,6 +38,7 @@ type ProfileId = Literal[
     "qwen3-instruct-compact-demo-v1",
     "qwen25-instruct-small-demo-v1",
     "qwen35-extractive-demo-v1",
+    "qwen35-extractive-text-demo-v1",
 ]
 
 
@@ -58,7 +60,11 @@ class InstructManifest(BaseModel):
 
 
 type GenerationManifest = (
-    ModelManifest | InstructManifest | SmallInstructManifest | ExtractiveManifest
+    ModelManifest
+    | InstructManifest
+    | SmallInstructManifest
+    | ExtractiveManifest
+    | TextExtractiveManifest
 )
 
 
@@ -104,7 +110,7 @@ class ModelProfile:
             user_input=user_input, system_supplied_context=system_supplied_context
         )
         match self.profile_id:
-            case "qwen35-extractive-demo-v1":
+            case "qwen35-extractive-demo-v1" | "qwen35-extractive-text-demo-v1":
                 return extractive_messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
                 )
@@ -123,7 +129,7 @@ class ModelProfile:
     def render(self, *, user_input: str, system_supplied_context: str) -> str:
         """Reproduce the verified runtime's exact current-message generation prefix."""
         match self.profile_id:
-            case "qwen35-extractive-demo-v1":
+            case "qwen35-extractive-demo-v1" | "qwen35-extractive-text-demo-v1":
                 return render_extractive_request(
                     self.messages(
                         user_input=user_input, system_supplied_context=system_supplied_context
@@ -169,6 +175,7 @@ class ModelProfile:
                 | "qwen3-instruct-compact-demo-v1"
                 | "qwen25-instruct-small-demo-v1"
                 | "qwen35-extractive-demo-v1"
+                | "qwen35-extractive-text-demo-v1"
             ):
                 return {
                     "num_ctx": self.manifest.context_window,
@@ -220,6 +227,14 @@ EXTRACTIVE_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-qwen35-excerpts-ru-v1",
 )
+TEXT_EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen35-extractive-text-demo-v1",
+    TextExtractiveManifest(),
+    EXTRACTIVE_TOKENIZER_SHA256,
+    EXTRACTIVE_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    EXTRACTIVE_PROFILE.renderer_revision,
+)
 
 
 def get_model_profile(profile_id: str) -> ModelProfile:
@@ -235,6 +250,8 @@ def get_model_profile(profile_id: str) -> ModelProfile:
             return SMALL_DEMO_PROFILE
         case "qwen35-extractive-demo-v1":
             return EXTRACTIVE_PROFILE
+        case "qwen35-extractive-text-demo-v1":
+            return TEXT_EXTRACTIVE_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
@@ -260,5 +277,7 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             return SMALL_DEMO_PROFILE
         case ExtractiveManifest():
             return EXTRACTIVE_PROFILE
+        case TextExtractiveManifest():
+            return TEXT_EXTRACTIVE_PROFILE
         case _:
             assert_never(manifest)

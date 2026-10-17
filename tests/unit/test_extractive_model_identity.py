@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
+    "profile_id", ["qwen35-extractive-demo-v1", "qwen35-extractive-text-demo-v1"]
+)
+@pytest.mark.parametrize(
     "fault",
     [
         "none",
@@ -26,10 +29,14 @@ if TYPE_CHECKING:
         "messages",
         "eos",
         "bos",
+        "projector",
+        "vision",
     ],
 )
-async def test_extractive_identity_requires_the_complete_pinned_bundle(fault: str) -> None:
-    profile = get_model_profile("qwen35-extractive-demo-v1")
+async def test_extractive_identity_requires_the_complete_pinned_bundle(
+    fault: str, profile_id: str
+) -> None:
+    profile = get_model_profile(profile_id)
     metadata: dict[str, JsonValue] = {
         "model_info": {
             "general.architecture": "qwen3" if fault == "architecture" else "qwen35",
@@ -42,7 +49,12 @@ async def test_extractive_identity_requires_the_complete_pinned_bundle(fault: st
         "template": "wrong" if fault == "template" else "{{ .Prompt }}",
         "system": "OVERRIDE" if fault == "system" else "",
         "messages": [{"role": "assistant", "content": "HIDDEN"}] if fault == "messages" else [],
+        "capabilities": ["completion", "tools", "thinking", "vision"]
+        if fault == "vision"
+        else ["completion", "tools", "thinking"],
     }
+    if fault == "projector":
+        metadata["projector_info"] = {"general.architecture": "clip"}
 
     def respond(request: httpx2.Request) -> httpx2.Response:
         if request.url.path == "/api/version":
@@ -69,7 +81,9 @@ async def test_extractive_identity_requires_the_complete_pinned_bundle(fault: st
     async with httpx2.AsyncClient(
         transport=httpx2.MockTransport(respond), base_url="http://127.0.0.1:11435"
     ) as client:
-        if fault == "none":
+        if fault == "none" or (
+            profile_id == "qwen35-extractive-demo-v1" and fault in {"projector", "vision"}
+        ):
             await verify_model(client, profile.manifest)
         else:
             with pytest.raises(GenerationUnavailable):

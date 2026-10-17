@@ -8,13 +8,18 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    ("profile_id", "model_family"),
-    [("qwen25-instruct-small-demo-v1", "qwen2.5"), ("qwen35-extractive-demo-v1", "qwen3.5")],
+    ("profile_id", "model_family", "template_family"),
+    [
+        ("qwen25-instruct-small-demo-v1", "qwen2.5", "qwen2.5"),
+        ("qwen35-extractive-demo-v1", "qwen3.5", "qwen3.5"),
+        ("qwen35-extractive-text-demo-v1", "rag-qwen35-text", "qwen3.5"),
+    ],
 )
 def test_tokenizer_provisioning_normalizes_windows_metadata_and_selects_model_family(
     tmp_path: Path,
     profile_id: str,
     model_family: str,
+    template_family: str,
 ) -> None:
     script = Path("scripts/provision-model-tokenizer.sh").resolve()
     digest = sha256(b"fixture").hexdigest()
@@ -63,5 +68,5 @@ done
     assert (tmp_path / ".cache/qwen3/revision/tokenizer.json").read_bytes() == b"fixture"
     assert urls.read_text(encoding="utf-8").splitlines() == [
         "https://huggingface.co/Qwen/Fixture/resolve/revision/tokenizer.json",
-        f"https://registry.ollama.ai/v2/library/{model_family}/blobs/sha256:{digest}",
+        f"https://registry.ollama.ai/v2/library/{template_family}/blobs/sha256:{digest}",
     ]

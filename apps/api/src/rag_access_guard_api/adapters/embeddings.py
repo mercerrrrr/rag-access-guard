@@ -104,5 +104,5 @@ def get_embedding_adapter() -> EmbeddingAdapter:
         Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}")),
         runtime=current_runtime(),
         retain_model=os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE")
-        != "qwen35-extractive-demo-v1",
+        not in {"qwen35-extractive-demo-v1", "qwen35-extractive-text-demo-v1"},
     )

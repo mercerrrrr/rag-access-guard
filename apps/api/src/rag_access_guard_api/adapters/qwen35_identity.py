@@ -24,3 +24,10 @@ class ExtractiveModelMetadata(BaseModel):
     model_info: ExtractiveModelInfo
     system: Literal[""] = ""
     messages: tuple[()] = ()
+
+
+class TextExtractiveModelMetadata(ExtractiveModelMetadata):
+    """Reject a vision projector reintroduced behind the text-only model tag."""
+
+    projector_info: None = None
+    capabilities: tuple[Literal["completion", "tools", "thinking"], ...]
