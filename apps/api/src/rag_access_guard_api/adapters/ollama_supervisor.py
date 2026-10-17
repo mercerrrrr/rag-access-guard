@@ -263,6 +263,7 @@ class OllamaSupervisor:
             OLLAMA_NUM_PARALLEL="1",
             OLLAMA_MAX_QUEUE="1",
             OLLAMA_MODELS=str(self.config.model_store_path),
+            LLAMA_ARG_CACHE_RAM="0",
         )
         job = WindowsJob(f"Local\\rag-demo-{self.config.instance_id}-{uuid4()}", create=True)
         process: subprocess.Popen[bytes] | None = None

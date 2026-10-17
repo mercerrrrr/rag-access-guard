@@ -33,6 +33,7 @@ def record(directory: Path, event: str) -> None:
             json.dumps(
                 {
                     "event": event,
+                    "cache_ram": os.environ.get("LLAMA_ARG_CACHE_RAM"),
                     "pid": process.pid,
                     "created": process.create_time(),
                     "executable": process.exe(),

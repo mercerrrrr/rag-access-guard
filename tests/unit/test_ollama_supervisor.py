@@ -14,7 +14,7 @@ import anyio
 import psutil
 import pytest
 from anyio.to_thread import run_sync
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from rag_access_guard_api.adapters import ollama
 from rag_access_guard_api.adapters.inference_runtime import (
@@ -340,6 +340,28 @@ def wait_file(path: Path) -> None:
         if monotonic() >= deadline:
             raise TimeoutError
         _ = interval.wait(0.01)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Owned demo uses native Windows jobs")
+@pytest.mark.parametrize("inherited", [None, "8192"])
+def test_owned_engine_disables_cross_request_ram_cache_without_mutating_parent(
+    owned_case: OwnedCase, monkeypatch: pytest.MonkeyPatch, inherited: str | None
+) -> None:
+    if inherited is None:
+        monkeypatch.delenv("LLAMA_ARG_CACHE_RAM", raising=False)
+    else:
+        monkeypatch.setenv("LLAMA_ARG_CACHE_RAM", inherited)
+    owned_case.supervisor.start()
+    wait_file(owned_case.directory / "grandchild")
+    observation_schema = TypeAdapter(dict[str, str | int | float | None])
+    observations = [
+        observation_schema.validate_json(line)
+        for line in (owned_case.directory / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    processes = [row for row in observations if row["event"] in {"root", "runner", "grandchild"}]
+    assert {row["event"] for row in processes} == {"root", "runner", "grandchild"}
+    assert {row["cache_ram"] for row in processes} == {"0"}
+    assert os.environ.get("LLAMA_ARG_CACHE_RAM") == inherited
 
 
 @pytest.fixture
