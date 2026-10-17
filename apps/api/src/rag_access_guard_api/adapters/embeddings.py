@@ -1,5 +1,6 @@
 """Local embedding boundary independent of document persistence."""
 
+import gc
 import os
 from dataclasses import dataclass, field
 from functools import partial
@@ -62,6 +63,7 @@ class E5EmbeddingAdapter:
     revision: str = MODEL_REVISION
     dimension: int = EMBEDDING_DIMENSION
     runtime: InferenceRuntime = field(default_factory=current_runtime, repr=False, compare=False)
+    retain_model: bool = True
 
     async def embed_passages(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
         """Embed canonical passages with the retrieval prefix."""
@@ -78,9 +80,22 @@ class E5EmbeddingAdapter:
             try:
                 from rag_access_guard_api.adapters.e5_runtime import get_runtime  # noqa: PLC0415
 
-                return get_runtime(self.path).encode(texts, kind)
+                if self.retain_model:
+                    return get_runtime(self.path).encode(texts, kind)
+                result: tuple[tuple[float, ...], ...] | None = None
+                try:
+                    result = get_runtime(self.path).encode(texts, kind)
+                except (EmbeddingError, OSError, RuntimeError, ValueError):
+                    result = None
+                finally:
+                    get_runtime.cache_clear()
+                    _ = gc.collect()
             except (OSError, RuntimeError, ValueError) as error:
                 raise EmbeddingError from error
+            else:
+                if result is None:
+                    raise EmbeddingError
+                return result
 
 
 def get_embedding_adapter() -> EmbeddingAdapter:
@@ -88,4 +103,6 @@ def get_embedding_adapter() -> EmbeddingAdapter:
     return E5EmbeddingAdapter(
         Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}")),
         runtime=current_runtime(),
+        retain_model=os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE")
+        != "qwen35-extractive-demo-v1",
     )
