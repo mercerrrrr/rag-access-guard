@@ -9,6 +9,7 @@ from rag_access_guard_api.schemas.generation import InferenceUnavailableError
 _ALREADY_EXISTS: Final = 183
 _MORE_DATA: Final = 234
 _MAX_LIST_SIZE: Final = 65536
+_WIN64_POINTER_BYTES: Final = 8
 
 
 @runtime_checkable
@@ -18,6 +19,9 @@ class _Kernel(Protocol):
     def OpenProcess(self, access: int, inherit: int, pid: int) -> int: ...  # noqa: N802
     def CloseHandle(self, handle: int) -> int: ...  # noqa: N802
     def SetHandleInformation(self, handle: int, mask: int, flags: int) -> int: ...  # noqa: N802
+    def SetInformationJobObject(  # noqa: N802 -- Win32 ABI.
+        self, job: int, kind: int, info: ctypes.Array[ctypes.c_ulonglong], size: int
+    ) -> int: ...
     def AssignProcessToJobObject(self, job: int, process: int) -> int: ...  # noqa: N802
     def IsProcessInJob(self, process: int, job: int, result: ctypes.Array[ctypes.c_int]) -> int: ...  # noqa: N802
     def TerminateJobObject(self, job: int, code: int) -> int: ...  # noqa: N802
@@ -40,6 +44,12 @@ def _kernel() -> _Kernel:
     library.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
     library.CloseHandle.argtypes = (wintypes.HANDLE,)
     library.SetHandleInformation.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD)
+    library.SetInformationJobObject.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+    )
     library.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
     library.IsProcessInJob.argtypes = (wintypes.HANDLE, wintypes.HANDLE, wintypes.LPVOID)
     library.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
@@ -62,10 +72,14 @@ def _checked_kernel(interface: object) -> _Kernel:
 
 
 class WindowsJob:
-    """Reopen one randomly named owned job; closing CLI handles leaves processes alive."""
+    """Own a named job, persistent by default or terminated on its last owner close."""
 
-    def __init__(self, name: str, *, create: bool = False) -> None:
+    def __init__(self, name: str, *, create: bool = False, kill_on_close: bool = False) -> None:
         """Open containment or create a collision-rejecting private name."""
+        if kill_on_close and not create:
+            raise ValueError
+        if kill_on_close and ctypes.sizeof(ctypes.c_void_p) != _WIN64_POINTER_BYTES:
+            raise OSError
         self.name: str = name
         self._kernel: _Kernel = _kernel()
         self._handle: int = (
@@ -78,9 +92,19 @@ class WindowsJob:
         if create and ctypes.get_last_error() == _ALREADY_EXISTS:
             self.close()
             raise FileExistsError
+        if kill_on_close:
+            # Win64 JOBOBJECT_EXTENDED_LIMIT_INFORMATION: 144 bytes, flags at offset 16.
+            limits = (ctypes.c_ulonglong * 18)()
+            ctypes.c_uint32.from_buffer(limits, 16).value = 0x2000
+            if not self._kernel.SetInformationJobObject(
+                self._handle, 9, limits, ctypes.sizeof(limits)
+            ):
+                error = ctypes.get_last_error()
+                self.close()
+                raise ctypes.WinError(error)
 
     def close(self) -> None:
-        """Close this handle without terminating contained processes."""
+        """Close this handle; explicit kill-on-close jobs terminate on the last close."""
         if self._handle:
             _ = self._kernel.CloseHandle(self._handle)
             self._handle = 0
@@ -89,6 +113,10 @@ class WindowsJob:
         """Retain containment in the owned root after the starting CLI exits."""
         if not self._kernel.SetHandleInformation(self._handle, 1, 1):
             raise ctypes.WinError(ctypes.get_last_error())
+        return self._handle
+
+    def creation_handle(self) -> int:
+        """Supply creation-time assignment without inheriting the owner handle."""
         return self._handle
 
     def assign(self, pid: int) -> None:

@@ -2,11 +2,12 @@
 
 import gc
 import os
+import sys
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import Final, Literal, Protocol
+from typing import Final, Literal, Protocol, final, override
 
 from rag_access_guard_api.adapters.inference_runtime import InferenceRuntime, current_runtime
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION
@@ -98,11 +99,40 @@ class E5EmbeddingAdapter:
                 return result
 
 
+@final
+class IsolatedE5EmbeddingAdapter(E5EmbeddingAdapter):
+    """Keep the physical Future without loading PyTorch into the API process."""
+
+    __slots__ = ()
+
+    @override
+    def _encode(
+        self, texts: tuple[str, ...], kind: Literal["query", "passage"]
+    ) -> tuple[tuple[float, ...], ...]:
+        from rag_access_guard_api.adapters.e5_process import (  # noqa: PLC0415
+            EmbeddingProcessUncertainError,
+            encode_isolated,
+        )
+
+        with _MODEL_LOCK:
+            try:
+                return encode_isolated(self.path, texts, kind, self.runtime)
+            except (EmbeddingProcessUncertainError, OSError):
+                self.runtime.close()
+                raise EmbeddingError from None
+
+
 def get_embedding_adapter() -> EmbeddingAdapter:
     """Return the locally provisioned embedding model."""
+    path = Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}"))
+    extractive = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") in {
+        "qwen35-extractive-demo-v1",
+        "qwen35-extractive-text-demo-v1",
+    }
+    if extractive and sys.platform == "win32" and sys.maxsize > 2**32:
+        return IsolatedE5EmbeddingAdapter(path, runtime=current_runtime(), retain_model=False)
     return E5EmbeddingAdapter(
-        Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}")),
+        path,
         runtime=current_runtime(),
-        retain_model=os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE")
-        not in {"qwen35-extractive-demo-v1", "qwen35-extractive-text-demo-v1"},
+        retain_model=not extractive,
     )
