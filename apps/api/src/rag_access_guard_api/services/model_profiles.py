@@ -17,6 +17,7 @@ from rag_access_guard_api.services.evidence_selection import (
 from rag_access_guard_api.services.extractive_manifest import (
     EXTRACTIVE_TEMPLATE_SHA256,
     EXTRACTIVE_TOKENIZER_SHA256,
+    CpuExtractiveManifest,
     ExtractiveManifest,
     TextExtractiveManifest,
 )
@@ -41,6 +42,7 @@ type ProfileId = Literal[
     "qwen25-extractive-small-demo-v1",
     "qwen35-extractive-demo-v1",
     "qwen35-extractive-text-demo-v1",
+    "qwen35-extractive-cpu-demo-v1",
 ]
 
 
@@ -68,6 +70,7 @@ type GenerationManifest = (
     | SmallExtractiveManifest
     | ExtractiveManifest
     | TextExtractiveManifest
+    | CpuExtractiveManifest
 )
 
 
@@ -124,6 +127,7 @@ class ModelProfile:
                 "qwen35-extractive-demo-v1"
                 | "qwen35-extractive-text-demo-v1"
                 | "qwen25-extractive-small-demo-v1"
+                | "qwen35-extractive-cpu-demo-v1"
             ):
                 return extractive_messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
@@ -143,7 +147,11 @@ class ModelProfile:
     def render(self, *, user_input: str, system_supplied_context: str) -> str:
         """Reproduce the verified runtime's exact current-message generation prefix."""
         match self.profile_id:
-            case "qwen35-extractive-demo-v1" | "qwen35-extractive-text-demo-v1":
+            case (
+                "qwen35-extractive-demo-v1"
+                | "qwen35-extractive-text-demo-v1"
+                | "qwen35-extractive-cpu-demo-v1"
+            ):
                 return render_extractive_request(
                     self.messages(
                         user_input=user_input, system_supplied_context=system_supplied_context
@@ -183,7 +191,7 @@ class ModelProfile:
     def options(self) -> GenerationOptions | InstructOptions | SmallExtractiveOptions:
         """Return a fresh payload so consumers cannot mutate the pinned bundle."""
         match self.profile_id:
-            case "qwen25-extractive-small-demo-v1":
+            case "qwen25-extractive-small-demo-v1" | "qwen35-extractive-cpu-demo-v1":
                 return {
                     "num_ctx": self.manifest.context_window,
                     "num_predict": self.manifest.max_output_tokens,
@@ -270,6 +278,14 @@ TEXT_EXTRACTIVE_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     EXTRACTIVE_PROFILE.renderer_revision,
 )
+CPU_EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen35-extractive-cpu-demo-v1",
+    CpuExtractiveManifest(),
+    EXTRACTIVE_TOKENIZER_SHA256,
+    EXTRACTIVE_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    TEXT_EXTRACTIVE_PROFILE.renderer_revision,
+)
 
 
 def get_model_profile(profile_id: str) -> ModelProfile:
@@ -289,6 +305,8 @@ def get_model_profile(profile_id: str) -> ModelProfile:
             profile = EXTRACTIVE_PROFILE
         case "qwen35-extractive-text-demo-v1":
             profile = TEXT_EXTRACTIVE_PROFILE
+        case "qwen35-extractive-cpu-demo-v1":
+            profile = CPU_EXTRACTIVE_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
@@ -319,6 +337,8 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             profile = EXTRACTIVE_PROFILE
         case TextExtractiveManifest():
             profile = TEXT_EXTRACTIVE_PROFILE
+        case CpuExtractiveManifest():
+            profile = CPU_EXTRACTIVE_PROFILE
         case _:
             assert_never(manifest)
     return profile

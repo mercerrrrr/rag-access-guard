@@ -15,6 +15,7 @@ from rag_access_guard_api.adapters.qwen35_identity import (
 )
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
 from rag_access_guard_api.services.extractive_manifest import (
+    CpuExtractiveManifest,
     ExtractiveManifest,
     TextExtractiveManifest,
 )
@@ -81,7 +82,7 @@ async def verify_model(client: httpx2.AsyncClient, manifest: GenerationManifest)
             models = InstalledModels.model_validate_json(await bounded_request(client, "/api/tags"))
             raw = await bounded_request(client, "/api/show", payload={"model": manifest.model_name})
             match manifest:
-                case TextExtractiveManifest():
+                case TextExtractiveManifest() | CpuExtractiveManifest():
                     metadata = TextExtractiveModelMetadata.model_validate_json(raw)
                     valid_system = True
                 case ExtractiveManifest():

@@ -181,6 +181,7 @@ async def test_cancellation_retains_model_until_physical_encoding_exits(
     [
         ("qwen35-extractive-demo-v1", False),
         ("qwen25-extractive-small-demo-v1", False),
+        ("qwen35-extractive-cpu-demo-v1", False),
         ("qwen25-instruct-small-demo-v1", True),
         ("qwen3-instruct-demo-v1", True),
         ("qwen3-thinking-legacy-v1", True),

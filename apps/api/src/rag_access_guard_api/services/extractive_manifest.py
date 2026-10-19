@@ -47,3 +47,20 @@ class TextExtractiveManifest(BaseModel):
     context_window: Literal[4096] = 4096
     max_output_tokens: Literal[512] = EXTRACTIVE_OUTPUT_LIMIT
     prompt_revision: Literal["rag-excerpts-ru-v1"] = "rag-excerpts-ru-v1"
+
+
+class CpuExtractiveManifest(BaseModel):
+    """Bind CPU tuning to a distinct type while retaining the text artifact contract."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_name: Literal["rag-qwen35-text:2b-q4_k_m"] = "rag-qwen35-text:2b-q4_k_m"
+    model_digest: Literal["84e2c930d4ab82f0e2ec10fc0f7497b59085db8304d6c2f979cbafc4009e5c1c"] = (
+        "84e2c930d4ab82f0e2ec10fc0f7497b59085db8304d6c2f979cbafc4009e5c1c"
+    )
+    tokenizer_id: Literal["Qwen/Qwen3.5-2B"] = "Qwen/Qwen3.5-2B"
+    tokenizer_revision: Literal["15852e8c16360a2fea060d615a32b45270f8a8fc"] = (
+        "15852e8c16360a2fea060d615a32b45270f8a8fc"
+    )
+    context_window: Literal[4096] = 4096
+    max_output_tokens: Literal[512] = EXTRACTIVE_OUTPUT_LIMIT
+    prompt_revision: Literal["rag-excerpts-ru-v1"] = "rag-excerpts-ru-v1"

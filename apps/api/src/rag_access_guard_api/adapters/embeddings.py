@@ -129,6 +129,7 @@ def get_embedding_adapter() -> EmbeddingAdapter:
         "qwen25-extractive-small-demo-v1",
         "qwen35-extractive-demo-v1",
         "qwen35-extractive-text-demo-v1",
+        "qwen35-extractive-cpu-demo-v1",
     }
     if extractive and sys.platform == "win32" and sys.maxsize > 2**32:
         return IsolatedE5EmbeddingAdapter(path, runtime=current_runtime(), retain_model=False)

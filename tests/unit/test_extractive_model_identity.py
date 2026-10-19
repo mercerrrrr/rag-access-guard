@@ -13,7 +13,12 @@ if TYPE_CHECKING:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "profile_id", ["qwen35-extractive-demo-v1", "qwen35-extractive-text-demo-v1"]
+    "profile_id",
+    [
+        "qwen35-extractive-demo-v1",
+        "qwen35-extractive-text-demo-v1",
+        "qwen35-extractive-cpu-demo-v1",
+    ],
 )
 @pytest.mark.parametrize(
     "fault",

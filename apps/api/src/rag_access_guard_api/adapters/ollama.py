@@ -24,11 +24,16 @@ from rag_access_guard_api.adapters.ollama_http import (
 from rag_access_guard_api.adapters.ollama_identity import verify_model
 from rag_access_guard_api.adapters.ollama_response import decode_answer, require_plain_answer
 from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor
+from rag_access_guard_api.adapters.tokenizer import (
+    TokenizerUnavailableError,
+    release_cached_tokenizer,
+)
 from rag_access_guard_api.config import INFERENCE_RECOVERY_SECONDS
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
 from rag_access_guard_api.services.evidence_context import evidence_passages
 from rag_access_guard_api.services.evidence_selection import render_selection, selection_schema
 from rag_access_guard_api.services.extractive_manifest import (
+    CpuExtractiveManifest,
     ExtractiveManifest,
     TextExtractiveManifest,
 )
@@ -139,7 +144,7 @@ class OllamaAdapter:
             case SmallExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
                 payload["format"] = selection_schema(entries)
-            case ExtractiveManifest() | TextExtractiveManifest():
+            case ExtractiveManifest() | TextExtractiveManifest() | CpuExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
                 payload.update(think=False, format=selection_schema(entries))
             case ModelManifest() | InstructManifest() | SmallInstructManifest():
@@ -147,6 +152,22 @@ class OllamaAdapter:
             case _:
                 assert_never(self.manifest)
         return payload, entries
+
+    async def _handoff_tokenizer(self) -> None:
+        match self.manifest:
+            case CpuExtractiveManifest():
+                await run_sync(release_cached_tokenizer)
+            case (
+                ModelManifest()
+                | InstructManifest()
+                | SmallInstructManifest()
+                | SmallExtractiveManifest()
+                | ExtractiveManifest()
+                | TextExtractiveManifest()
+            ):
+                pass
+            case _:
+                assert_never(self.manifest)
 
     async def _generate(
         self, client: httpx2.AsyncClient, *, user_input: str, system_supplied_context: str
@@ -157,6 +178,7 @@ class OllamaAdapter:
         )
         try:
             with anyio.fail_after(TIMEOUT_SECONDS):
+                await self._handoff_tokenizer()
                 claim = (
                     await run_sync(self._supervisor.begin_inference)
                     if self._supervisor is not None
@@ -182,6 +204,7 @@ class OllamaAdapter:
             OSError,
             psutil.Error,
             InferenceUnavailableError,
+            TokenizerUnavailableError,
         ):
             if dispatch.possibly_sent:
                 await self._recover()

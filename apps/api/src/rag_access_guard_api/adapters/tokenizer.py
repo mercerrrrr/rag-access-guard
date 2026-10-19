@@ -1,5 +1,6 @@
 """Pinned E5 tokenization without network access or executable model code."""
 
+import gc
 import os
 from functools import cache
 from hashlib import sha256
@@ -61,3 +62,12 @@ def get_tokenizer() -> E5TokenCounter:
         )
     )
     return E5TokenCounter(path)
+
+
+def release_cached_tokenizer() -> None:
+    """Drop only the ingestion cache reference; active callers retain their counters."""
+    try:
+        get_tokenizer.cache_clear()
+        _ = gc.collect()
+    except (MemoryError, RuntimeError):
+        raise TokenizerUnavailableError from None
