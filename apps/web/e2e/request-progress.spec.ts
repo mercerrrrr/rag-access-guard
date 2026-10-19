@@ -122,6 +122,67 @@ for (const recovery of ["retry", "history"] as const) {
   });
 }
 
+test("lost_post_with_failed_terminal_history_can_exact_retry_without_stale_content", async ({ actors, scenario }) => {
+  const page = actors.student.page;
+  const threadPath = `/api/chat/threads/${scenario.threadId}`;
+  const seeded = await actors.student.context.request.post(`${threadPath}/messages`, {
+    headers: actors.student.headers,
+    data: { request_id: randomUUID(), expected_thread_revision: 0, user_input: "Каков учебный код проекта?" },
+  });
+  expect(seeded.status()).toBe(200);
+  const prior = messageResponseSchema.parse(await seeded.json());
+  expect(prior.turn.state).toBe("available");
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  await expect(page.getByText(answerMarker, { exact: true })).toBeVisible();
+  const messagesRoute = `**${threadPath}/messages`;
+  const historyRoute = `**${threadPath}`;
+  let loseOriginalPost = true;
+  let failedReads = 0;
+  await page.route(messagesRoute, async route => {
+    if (!loseOriginalPost) { await route.continue(); return; }
+    loseOriginalPost = false;
+    await route.fetch();
+    await route.abort("failed");
+  });
+  await page.route(historyRoute, async route => {
+    if (failedReads > 0) { await route.continue(); return; }
+    failedReads += 1;
+    await route.fulfill({ status: 500, contentType: "application/json",
+      headers: { "Cache-Control": "private, no-store" }, body: JSON.stringify({ detail: "Internal server error" }) });
+  });
+  const question = `Каков учебный код проекта? Восстановление ${randomUUID()}  `;
+  try {
+    await withHeldQuestion(actors, scenario.threadId, question, async (submission, release) => {
+      expect(submission.expected_thread_revision).toBe(prior.thread_revision);
+      await page.getByRole("button", { name: /^Источники ответа/ }).click();
+      await page.getByRole("button", { name: `[1] ${scenario.title}`, exact: true }).click();
+      await expect(page.getByRole("region", { name: "Содержимое источника", exact: true })).toBeVisible();
+      await release();
+      await expect(page.locator(".chat-feedback")).toHaveText("Не удалось загрузить диалог. Повторите обновление.");
+      expect(failedReads).toBe(1);
+      await expect(page.getByText(answerMarker, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(scenario.title, { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "Содержимое источника", exact: true })).toHaveCount(0);
+      const retried = page.waitForRequest(request => request.method() === "POST"
+        && request.url().endsWith(`${threadPath}/messages`));
+      const completed = page.waitForResponse(response => response.url().endsWith(`${threadPath}/messages`));
+      await page.getByRole("button", { name: "Повторить тот же запрос", exact: true }).click();
+      expect(parseSubmission(await retried)).toEqual(submission);
+      expect(messageResponseSchema.parse(await (await completed).json()).replayed).toBe(true);
+      await expect(page.locator(".chat-transcript").getByText(question, { exact: true })).toHaveCount(1);
+      await expect(page.locator(".chat-transcript").getByText(answerMarker, { exact: true })).toHaveCount(2);
+      const detail = await canonicalThread(actors, scenario.threadId);
+      expect(detail.turns).toHaveLength(2);
+      expect(detail.turns.filter(turn => turn.request_id === submission.request_id)).toHaveLength(1);
+      expect(detail.turns.find(turn => turn.request_id === submission.request_id))
+        .toMatchObject({ state: "available", answer: answerMarker, user_input: submission.user_input });
+    });
+  } finally {
+    await page.unroute(messagesRoute);
+    await page.unroute(historyRoute);
+  }
+});
+
 test("revoking_grant_before_release_prevents_held_answer", async ({ actors, scenario }) => {
   const page = actors.student.page;
   await withHeldQuestion(actors, scenario.threadId, `Каков учебный код проекта? ${randomUUID()}`, async (submission, release) => {

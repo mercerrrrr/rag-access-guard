@@ -114,7 +114,14 @@ export function createChatState(api: ChatApi, session: SessionState) {
   }
   async function retry() {
     const saved = retryRequest.value;
-    if (saved === null || sending.value || loading.value || thread.value?.id !== saved.threadId) return;
+    if (saved === null || sending.value || loading.value || currentId !== saved.threadId) return;
+    if (thread.value === null) {
+      const current = epoch;
+      const restored = await loadThread(saved.threadId);
+      if (!restored || epoch !== current + 1 || currentId !== saved.threadId
+        || retryRequest.value?.body.request_id !== saved.body.request_id) return;
+    }
+    if (thread.value?.id !== saved.threadId) return;
     return await submission.transmit(saved.threadId, saved.body);
   }
   function cancel() {
