@@ -33,10 +33,13 @@ def _replace(*, help_enabled: bool) -> None:
     if help_enabled:
         turn = turn.replace("'interrupted'", "'interrupted','assistant_help'")
         audit = audit.replace("'access_checked'", "'access_checked','assistant_help'")
+    # Earlier migrations can queue this trigger while backfilling legacy answers.
+    op.execute("SET CONSTRAINTS chat_turn_sources_consistent IMMEDIATE")
     op.drop_constraint("ck_chat_turns_state", "chat_turns", type_="check")
     op.create_check_constraint("ck_chat_turns_state", "chat_turns", turn)
     op.drop_constraint("ck_audit_events_event_type", "audit_events", type_="check")
     op.create_check_constraint("ck_audit_events_event_type", "audit_events", audit)
+    op.execute("SET CONSTRAINTS chat_turn_sources_consistent DEFERRED")
 
 
 def upgrade() -> None:
