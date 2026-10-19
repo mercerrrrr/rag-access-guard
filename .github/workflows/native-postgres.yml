@@ -1,0 +1,125 @@
+name: Native PostgreSQL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/native-postgres.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: PostgreSQL 18 with pgvector on Windows
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check out pgvector 0.8.6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pgvector/pgvector
+          ref: 8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c
+          path: .native-source
+          persist-credentials: false
+      - name: Download and verify PostgreSQL 18.6
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://get.enterprisedb.com/postgresql/postgresql-18.6-5-windows-x64-binaries.zip'
+          $archive = Join-Path $env:RUNNER_TEMP 'postgresql.zip'
+          Invoke-WebRequest $url -OutFile $archive
+          $expected = 'e2246ba91d22345bc3d017586c09ede52d9df180b1eeb480f050445f1cad84e2'
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Archive hash mismatch' }
+          Expand-Archive $archive (Join-Path $env:RUNNER_TEMP 'pg18')
+          $root = Join-Path $env:RUNNER_TEMP 'pg18/pgsql'
+          "PGROOT=$root" >> $env:GITHUB_ENV
+          $version = & "$root/bin/postgres.exe" --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^postgres \(PostgreSQL\) 18\.6$') { throw 'Unexpected PostgreSQL version' }
+          if (Test-Path "$root/lib/vector.dll") { throw 'Expected extension-free upstream archive' }
+      - name: Verify extension is absent before installation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PGHOST = '127.0.0.1'
+          $env:PGPORT = '55438'
+          $env:PGUSER = 'postgres'
+          $env:PGPASSWORD = [Guid]::NewGuid().ToString('N')
+          $data = Join-Path $env:RUNNER_TEMP 'native-smoke'
+          $passwordFile = Join-Path $env:RUNNER_TEMP 'native-smoke-password'
+          [IO.File]::WriteAllText($passwordFile, $env:PGPASSWORD)
+          & "$env:PGROOT/bin/initdb.exe" -D $data -U postgres --auth=scram-sha-256 --pwfile=$passwordFile --encoding=UTF8 --no-locale
+          if ($LASTEXITCODE -ne 0) { throw 'initdb failed' }
+          & "$env:PGROOT/bin/pg_ctl.exe" -D $data -l "$env:RUNNER_TEMP/native-smoke.log" -o '-h 127.0.0.1 -p 55438 -c shared_buffers=32MB -c max_connections=20' -w start
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed' }
+          try {
+            & "$env:PGROOT/bin/psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c 'CREATE EXTENSION vector;'
+            if ($LASTEXITCODE -eq 0) { throw 'Extension unexpectedly available before build' }
+          } finally {
+            & "$env:PGROOT/bin/pg_ctl.exe" -D $data -m fast -w stop
+            if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL shutdown failed' }
+          }
+      - name: Compile and install pinned extension
+        shell: cmd
+        working-directory: .native-source
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" && nmake /NOLOGO /F Makefile.win && nmake /NOLOGO /F Makefile.win install
+      - name: Verify native extension loading and vector distance
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PGHOST = '127.0.0.1'
+          $env:PGPORT = '55438'
+          $env:PGUSER = 'postgres'
+          $env:PGPASSWORD = [IO.File]::ReadAllText((Join-Path $env:RUNNER_TEMP 'native-smoke-password'))
+          $data = Join-Path $env:RUNNER_TEMP 'native-smoke'
+          & "$env:PGROOT/bin/pg_ctl.exe" -D $data -l "$env:RUNNER_TEMP/native-smoke.log" -o '-h 127.0.0.1 -p 55438 -c shared_buffers=32MB -c max_connections=20' -w start
+          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed' }
+          try {
+            & "$env:PGROOT/bin/psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c 'CREATE EXTENSION vector;'
+            if ($LASTEXITCODE -ne 0) { throw 'Extension loading failed' }
+            $result = & "$env:PGROOT/bin/psql.exe" -X -At -v ON_ERROR_STOP=1 -d postgres -c "SELECT current_setting('server_version_num'), extversion, '[1,2,3]'::vector <-> '[1,2,4]'::vector FROM pg_extension WHERE extname='vector';"
+            if ($LASTEXITCODE -ne 0 -or $result -ne '180006|0.8.6|1') { throw 'Native extension result mismatch' }
+          } finally {
+            & "$env:PGROOT/bin/pg_ctl.exe" -D $data -m fast -w stop
+            if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL shutdown failed' }
+          }
+      - name: Package runtime and file hashes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:RUNNER_TEMP 'native-postgres'
+          New-Item -ItemType Directory -Path $bundle | Out-Null
+          foreach ($name in @('bin', 'lib', 'share', 'doc', 'licenses')) {
+            $path = Join-Path $env:PGROOT $name
+            if (Test-Path $path) { Copy-Item $path $bundle -Recurse }
+          }
+          Copy-Item '.native-source/LICENSE' "$bundle/PGVECTOR-LICENSE.txt"
+          Invoke-WebRequest 'https://raw.githubusercontent.com/postgres/postgres/REL_18_6/COPYRIGHT' -OutFile "$bundle/POSTGRESQL-COPYRIGHT.txt"
+          $files = [ordered]@{}
+          Get-ChildItem $bundle -File -Recurse | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($bundle, $_.FullName).Replace('\', '/')
+            $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $manifest = [ordered]@{
+            schema_version = 1
+            postgres_version = '18.6'
+            postgres_archive_sha256 = 'e2246ba91d22345bc3d017586c09ede52d9df180b1eeb480f050445f1cad84e2'
+            pgvector_version = '0.8.6'
+            pgvector_commit = '8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c'
+            source_sha = $env:GITHUB_SHA
+            run_id = $env:GITHUB_RUN_ID
+            runner = $env:ImageVersion
+            files = $files
+          }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content "$bundle/runtime-manifest.json" -Encoding utf8NoBOM
+      - name: Save tested runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: postgresql-18.6-pgvector-0.8.6-windows-x64
+          path: ${{ runner.temp }}/native-postgres
+          if-no-files-found: error
+          retention-days: 14
