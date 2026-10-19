@@ -5,17 +5,20 @@ import os
 import sys
 from dataclasses import dataclass, field
 from functools import partial
+from hashlib import sha256
 from pathlib import Path
 from threading import Lock
 from typing import Final, Literal, Protocol, final, override
 
 from rag_access_guard_api.adapters.inference_runtime import InferenceRuntime, current_runtime
+from rag_access_guard_api.adapters.query_vector_cache import QueryVectorKey, runtime_query_cache
 from rag_access_guard_api.adapters.tokenizer import MODEL_REVISION
 from rag_access_guard_api.schemas.embedding_vectors import (
     EMBEDDING_DIMENSION,
     EmbeddingError,
     validate_vectors,
 )
+from rag_access_guard_api.schemas.generation import InferenceUnavailableError
 
 __all__ = [
     "E5EmbeddingAdapter",
@@ -65,6 +68,7 @@ class E5EmbeddingAdapter:
     dimension: int = EMBEDDING_DIMENSION
     runtime: InferenceRuntime = field(default_factory=current_runtime, repr=False, compare=False)
     retain_model: bool = True
+    cache_queries: bool = False
 
     async def embed_passages(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
         """Embed canonical passages with the retrieval prefix."""
@@ -72,7 +76,27 @@ class E5EmbeddingAdapter:
 
     async def embed_query(self, text: str) -> tuple[float, ...]:
         """Embed one query with the query prefix."""
+        if self.cache_queries:
+            return await self.runtime.run_embedding(partial(self._cached_query, text))
         return (await self.runtime.run_embedding(partial(self._encode, (text,), "query")))[0]
+
+    def _cached_query(self, text: str) -> tuple[float, ...]:
+        if self.runtime.generation_quarantined:
+            raise InferenceUnavailableError
+        key = QueryVectorKey(
+            self.model_id, self.revision, self.path.resolve(), sha256(text.encode("utf-8")).digest()
+        )
+        cache = runtime_query_cache(self.runtime)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        vectors = self._encode((text,), "query")
+        validate_vectors(vectors, 1)
+        if self.runtime.generation_quarantined:
+            raise InferenceUnavailableError
+        vector = tuple(vectors[0])
+        cache.put(key, vector)
+        return vector
 
     def _encode(
         self, texts: tuple[str, ...], kind: Literal["query", "passage"]
@@ -125,6 +149,9 @@ class IsolatedE5EmbeddingAdapter(E5EmbeddingAdapter):
 def get_embedding_adapter() -> EmbeddingAdapter:
     """Return the locally provisioned embedding model."""
     path = Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}"))
+    cache_queries = (
+        os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") == "qwen35-extractive-cpu-demo-v1"
+    )
     extractive = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") in {
         "qwen25-extractive-small-demo-v1",
         "qwen35-extractive-demo-v1",
@@ -132,9 +159,12 @@ def get_embedding_adapter() -> EmbeddingAdapter:
         "qwen35-extractive-cpu-demo-v1",
     }
     if extractive and sys.platform == "win32" and sys.maxsize > 2**32:
-        return IsolatedE5EmbeddingAdapter(path, runtime=current_runtime(), retain_model=False)
+        return IsolatedE5EmbeddingAdapter(
+            path, runtime=current_runtime(), retain_model=False, cache_queries=cache_queries
+        )
     return E5EmbeddingAdapter(
         path,
         runtime=current_runtime(),
         retain_model=not extractive,
+        cache_queries=cache_queries,
     )
