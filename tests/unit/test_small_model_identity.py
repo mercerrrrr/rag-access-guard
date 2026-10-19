@@ -14,6 +14,9 @@ from rag_access_guard_api.services.model_profiles import get_model_profile
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
+    "profile_id", ["qwen25-instruct-small-demo-v1", "qwen25-extractive-small-demo-v1"]
+)
+@pytest.mark.parametrize(
     "fault",
     [
         "none",
@@ -28,8 +31,10 @@ from rag_access_guard_api.services.model_profiles import get_model_profile
         "tokenizer",
     ],
 )
-async def test_small_identity_accepts_only_its_complete_verified_bundle(fault: str) -> None:
-    profile = get_model_profile("qwen25-instruct-small-demo-v1")
+async def test_small_identity_accepts_only_its_complete_verified_bundle(
+    fault: str, profile_id: str
+) -> None:
+    profile = get_model_profile(profile_id)
     template = (
         Path(".cache/qwen3") / profile.manifest.tokenizer_revision / "template.txt"
     ).read_text(encoding="utf-8")

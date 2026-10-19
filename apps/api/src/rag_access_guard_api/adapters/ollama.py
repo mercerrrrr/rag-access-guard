@@ -39,7 +39,10 @@ from rag_access_guard_api.services.model_profiles import (
     ModelProfile,
     profile_for_manifest,
 )
-from rag_access_guard_api.services.small_model_manifest import SmallInstructManifest
+from rag_access_guard_api.services.small_model_manifest import (
+    SmallExtractiveManifest,
+    SmallInstructManifest,
+)
 
 if TYPE_CHECKING:
     from rag_access_guard_api.services.evidence_context import EvidencePassage
@@ -133,6 +136,9 @@ class OllamaAdapter:
             "options": TypeAdapter[JsonValue](JsonValue).validate_python(self.profile.options()),
         }
         match self.manifest:
+            case SmallExtractiveManifest():
+                entries = evidence_passages(system_supplied_context)
+                payload["format"] = selection_schema(entries)
             case ExtractiveManifest() | TextExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
                 payload.update(think=False, format=selection_schema(entries))

@@ -29,6 +29,7 @@ from rag_access_guard_api.services.model_manifest import (
 from rag_access_guard_api.services.small_model_manifest import (
     SMALL_TEMPLATE_SHA256,
     SMALL_TOKENIZER_SHA256,
+    SmallExtractiveManifest,
     SmallInstructManifest,
 )
 
@@ -37,6 +38,7 @@ type ProfileId = Literal[
     "qwen3-instruct-demo-v1",
     "qwen3-instruct-compact-demo-v1",
     "qwen25-instruct-small-demo-v1",
+    "qwen25-extractive-small-demo-v1",
     "qwen35-extractive-demo-v1",
     "qwen35-extractive-text-demo-v1",
 ]
@@ -63,6 +65,7 @@ type GenerationManifest = (
     ModelManifest
     | InstructManifest
     | SmallInstructManifest
+    | SmallExtractiveManifest
     | ExtractiveManifest
     | TextExtractiveManifest
 )
@@ -80,6 +83,13 @@ class InstructOptions(GenerationOptions):
 
     temperature: int
     seed: int
+
+
+class SmallExtractiveOptions(InstructOptions):
+    """Bind the CPU-only compute batch without reducing the context budget."""
+
+    num_gpu: int
+    num_batch: int
 
 
 INSTRUCT_SYSTEM: Final = (
@@ -110,7 +120,11 @@ class ModelProfile:
             user_input=user_input, system_supplied_context=system_supplied_context
         )
         match self.profile_id:
-            case "qwen35-extractive-demo-v1" | "qwen35-extractive-text-demo-v1":
+            case (
+                "qwen35-extractive-demo-v1"
+                | "qwen35-extractive-text-demo-v1"
+                | "qwen25-extractive-small-demo-v1"
+            ):
                 return extractive_messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
                 )
@@ -139,7 +153,11 @@ class ModelProfile:
                 return render_request(
                     user_input=user_input, system_supplied_context=system_supplied_context
                 )
-            case "qwen3-instruct-demo-v1" | "qwen3-instruct-compact-demo-v1":
+            case (
+                "qwen3-instruct-demo-v1"
+                | "qwen3-instruct-compact-demo-v1"
+                | "qwen25-extractive-small-demo-v1"
+            ):
                 messages = self.messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
                 )
@@ -162,9 +180,18 @@ class ModelProfile:
             case _:
                 assert_never(self.profile_id)
 
-    def options(self) -> GenerationOptions | InstructOptions:
+    def options(self) -> GenerationOptions | InstructOptions | SmallExtractiveOptions:
         """Return a fresh payload so consumers cannot mutate the pinned bundle."""
         match self.profile_id:
+            case "qwen25-extractive-small-demo-v1":
+                return {
+                    "num_ctx": self.manifest.context_window,
+                    "num_predict": self.manifest.max_output_tokens,
+                    "temperature": 0,
+                    "seed": 42,
+                    "num_gpu": 0,
+                    "num_batch": 64,
+                }
             case "qwen3-thinking-legacy-v1":
                 return {
                     "num_ctx": self.manifest.context_window,
@@ -219,6 +246,14 @@ SMALL_DEMO_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-qwen25-collated-users-origin-v1",
 )
+SMALL_EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen25-extractive-small-demo-v1",
+    SmallExtractiveManifest(),
+    SMALL_TOKENIZER_SHA256,
+    SMALL_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    "ollama-qwen25-excerpts-ru-v1",
+)
 EXTRACTIVE_PROFILE: Final = ModelProfile(
     "qwen35-extractive-demo-v1",
     ExtractiveManifest(),
@@ -241,20 +276,23 @@ def get_model_profile(profile_id: str) -> ModelProfile:
     """Reject anything outside the pinned generation bundles."""
     match profile_id:
         case "qwen3-thinking-legacy-v1":
-            return LEGACY_PROFILE
+            profile = LEGACY_PROFILE
         case "qwen3-instruct-demo-v1":
-            return DEMO_PROFILE
+            profile = DEMO_PROFILE
         case "qwen3-instruct-compact-demo-v1":
-            return COMPACT_DEMO_PROFILE
+            profile = COMPACT_DEMO_PROFILE
         case "qwen25-instruct-small-demo-v1":
-            return SMALL_DEMO_PROFILE
+            profile = SMALL_DEMO_PROFILE
+        case "qwen25-extractive-small-demo-v1":
+            profile = SMALL_EXTRACTIVE_PROFILE
         case "qwen35-extractive-demo-v1":
-            return EXTRACTIVE_PROFILE
+            profile = EXTRACTIVE_PROFILE
         case "qwen35-extractive-text-demo-v1":
-            return TEXT_EXTRACTIVE_PROFILE
+            profile = TEXT_EXTRACTIVE_PROFILE
         case _:
             message = "Unknown model profile"
             raise ValueError(message)
+    return profile
 
 
 def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
@@ -270,14 +308,17 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
                 LEGACY_PROFILE.renderer_revision,
             )
         case InstructManifest(context_window=4096):
-            return COMPACT_DEMO_PROFILE
+            profile = COMPACT_DEMO_PROFILE
         case InstructManifest():
-            return DEMO_PROFILE
+            profile = DEMO_PROFILE
         case SmallInstructManifest():
-            return SMALL_DEMO_PROFILE
+            profile = SMALL_DEMO_PROFILE
+        case SmallExtractiveManifest():
+            profile = SMALL_EXTRACTIVE_PROFILE
         case ExtractiveManifest():
-            return EXTRACTIVE_PROFILE
+            profile = EXTRACTIVE_PROFILE
         case TextExtractiveManifest():
-            return TEXT_EXTRACTIVE_PROFILE
+            profile = TEXT_EXTRACTIVE_PROFILE
         case _:
             assert_never(manifest)
+    return profile

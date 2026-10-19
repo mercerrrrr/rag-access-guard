@@ -126,6 +126,7 @@ def get_embedding_adapter() -> EmbeddingAdapter:
     """Return the locally provisioned embedding model."""
     path = Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}"))
     extractive = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") in {
+        "qwen25-extractive-small-demo-v1",
         "qwen35-extractive-demo-v1",
         "qwen35-extractive-text-demo-v1",
     }

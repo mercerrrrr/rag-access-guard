@@ -24,7 +24,10 @@ from rag_access_guard_api.services.model_profiles import (
     InstructManifest,
     profile_for_manifest,
 )
-from rag_access_guard_api.services.small_model_manifest import SmallInstructManifest
+from rag_access_guard_api.services.small_model_manifest import (
+    SmallExtractiveManifest,
+    SmallInstructManifest,
+)
 
 
 class RuntimeVersion(BaseModel):
@@ -84,7 +87,7 @@ async def verify_model(client: httpx2.AsyncClient, manifest: GenerationManifest)
                 case ExtractiveManifest():
                     metadata = ExtractiveModelMetadata.model_validate_json(raw)
                     valid_system = True
-                case SmallInstructManifest():
+                case SmallInstructManifest() | SmallExtractiveManifest():
                     metadata = SmallModelMetadata.model_validate_json(raw)
                     valid_system = (
                         sha256(metadata.system.encode()).hexdigest() == manifest.model_system_sha256
