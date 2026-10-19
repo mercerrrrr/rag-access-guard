@@ -152,6 +152,13 @@ def get_embedding_adapter() -> EmbeddingAdapter:
     cache_queries = (
         os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") == "qwen35-extractive-cpu-demo-v1"
     )
+    execution = os.environ.get("RAG_ACCESS_GUARD_E5_EXECUTION", "isolated")
+    if execution not in {"isolated", "resident"} or (execution == "resident" and not cache_queries):
+        raise EmbeddingError
+    if execution == "resident":
+        return E5EmbeddingAdapter(
+            path, runtime=current_runtime(), retain_model=True, cache_queries=True
+        )
     extractive = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") in {
         "qwen25-extractive-small-demo-v1",
         "qwen35-extractive-demo-v1",

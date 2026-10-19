@@ -41,10 +41,23 @@ class Settings(BaseSettings):
     retrieval_config_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
     model_profile: ProfileId = "qwen3-thinking-legacy-v1"
+    e5_execution: Literal["isolated", "resident"] = "isolated"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_supervisor_config_path: Path | None = None
     generation_timeout_seconds: int = Field(default=GENERATION_TIMEOUT_SECONDS, gt=0, le=60)
     pending_lease_seconds: int = Field(default=PENDING_LEASE_SECONDS, gt=0)
+
+    @model_validator(mode="after")
+    def validate_e5_execution(self) -> Self:
+        """Resident embeddings require the measured local CPU demonstration profile."""
+        if self.e5_execution == "resident" and (
+            self.model_profile != "qwen35-extractive-cpu-demo-v1"
+            or self.llm_adapter != "ollama"
+            or not self.loopback_development
+        ):
+            message = "Resident E5 requires the local CPU Ollama demonstration"
+            raise ValueError(message)
+        return self
 
     @model_validator(mode="after")
     def validate_generation_budget(self) -> Self:
