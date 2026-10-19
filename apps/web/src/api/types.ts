@@ -45,6 +45,14 @@ export type ThreadView = z.infer<typeof threadSchema>;
 export type ThreadDetail = z.infer<typeof threadDetailSchema>;
 export type TurnView = z.infer<typeof turnSchema>;
 export type MessageResponse = z.infer<typeof messageResponseSchema>;
+export const requestStatusSchema = z.discriminatedUnion("state", [
+  z.strictObject({ request_id: z.uuid(), state: z.literal("running"),
+    stage: z.enum(["retrieval", "generation", "authorization", "recovery"]),
+    elapsed_seconds: z.number().int().nonnegative() }),
+  z.strictObject({ request_id: z.uuid(), state: z.enum(["absent", "terminal", "expired"]),
+    stage: z.null(), elapsed_seconds: z.null() }),
+]).readonly();
+export type RequestStatus = z.infer<typeof requestStatusSchema>;
 export interface MessageRequest {
   readonly request_id: string;
   readonly expected_thread_revision: number;
@@ -54,6 +62,7 @@ export interface ChatApi {
   list(signal: AbortSignal): Promise<readonly ThreadView[]>;
   create(token: string, signal: AbortSignal): Promise<ThreadView>;
   detail(id: string, signal: AbortSignal): Promise<ThreadDetail>;
+  status(threadId: string, requestId: string, signal: AbortSignal): Promise<RequestStatus>;
   send(id: string, body: MessageRequest, token: string, signal: AbortSignal): Promise<MessageResponse>;
   source(source: SourceView, signal: AbortSignal): Promise<SourceContent>;
 }

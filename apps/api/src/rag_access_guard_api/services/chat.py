@@ -24,11 +24,13 @@ from rag_access_guard_api.config import (
     PENDING_LEASE_SECONDS,
 )
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
+from rag_access_guard_api.schemas.chat_progress import ProgressStage
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
 from rag_access_guard_api.services import chat_completion, security
 from rag_access_guard_api.services import chat_reservation as turns
 from rag_access_guard_api.services.assistant_help import classify_help
+from rag_access_guard_api.services.chat_progress import RequestProgressTracker
 from rag_access_guard_api.services.chat_release import Generated, Neutral, StaleGeneration
 from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
 from rag_access_guard_api.services.chat_state import ChatConflict, GenerationAttempt, Reservation
@@ -58,6 +60,7 @@ class ChatService:
     generation_timeout_seconds: int = GENERATION_TIMEOUT_SECONDS
     pending_lease_seconds: int = PENDING_LEASE_SECONDS
     runtime: InferenceRuntime = field(default_factory=current_runtime, repr=False, compare=False)
+    progress: RequestProgressTracker | None = field(default=None, repr=False, compare=False)
 
     async def generate_turn(
         self,
@@ -103,17 +106,23 @@ class ChatService:
             case MessageResponse() | ChatConflict():
                 return reserved
             case Reservation():
-                for _ in range(GENERATION_MAX_ATTEMPTS):
-                    completed = await self._attempt(session_token, reserved, request.user_input)
-                    if not isinstance(completed, StaleGeneration):
-                        return completed
-                final = await self._complete(
-                    session_token, Neutral(reserved, "policy_changed"), expected_attempt=reserved
-                )
-                if isinstance(final, StaleGeneration):
-                    message = "Neutral completion cannot request generation"
-                    raise TypeError(message)
-                return final
+                try:
+                    for _ in range(GENERATION_MAX_ATTEMPTS):
+                        completed = await self._attempt(session_token, reserved, request.user_input)
+                        if not isinstance(completed, StaleGeneration):
+                            return completed
+                    final = await self._complete(
+                        session_token,
+                        Neutral(reserved, "policy_changed"),
+                        expected_attempt=reserved,
+                    )
+                    if isinstance(final, StaleGeneration):
+                        message = "Neutral completion cannot request generation"
+                        raise TypeError(message)
+                    return final
+                finally:
+                    if self.progress is not None:
+                        self.progress.discard(thread_id, request.request_id)
             case _:
                 assert_never(reserved)
 
@@ -147,6 +156,7 @@ class ChatService:
             if counter is None:
                 return Neutral(reservation, "generation_unavailable")
             with anyio.fail_after(self.generation_timeout_seconds):
+                self._set_stage(reservation, "retrieval")
                 vector = await embeddings.get_embedding_adapter().embed_query(user_input)
                 async with self.policy.protected_read(session_token) as uow:
                     _ = await get_owned_thread(uow, reservation.thread_id)
@@ -214,6 +224,7 @@ class ChatService:
         )
         if not await self._active(session_token, attempt, counter=counter):
             return Neutral(reservation, "interrupted")
+        self._set_stage(reservation, "generation")
         body = await llm.get_llm_adapter().generate(
             user_input=user_input,
             system_supplied_context=attempt.model_context or attempt.prepared.model_context,
@@ -257,6 +268,11 @@ class ChatService:
         *,
         expected_attempt: Reservation,
     ) -> Completion:
+        self._set_stage(expected_attempt, "authorization")
         return await chat_completion.ChatCompletion(self.policy, self.csrf_token).complete(
             session_token, outcome, expected_attempt=expected_attempt
         )
+
+    def _set_stage(self, reservation: Reservation, stage: ProgressStage) -> None:
+        if self.progress is not None:
+            self.progress.set_stage(reservation.thread_id, reservation.request_id, stage)

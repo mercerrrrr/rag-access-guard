@@ -28,6 +28,12 @@ const answer = computed(() => {
     <section aria-label="Ответ">
       <h3>Ответ</h3>
       <UnavailableAnswer v-if="turn.state === 'unavailable'" />
+      <slot
+        v-else-if="turn.state === 'pending'"
+        name="pending"
+      >
+        <p>{{ answer }}</p>
+      </slot>
       <p v-else>
         {{ answer }}
       </p>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ApiError } from "@/api/errors";
 import { requestJson } from "@/api/client";
 import { messageResponseSchema, sourceContentSchema, sourceSchema, threadDetailSchema,
-  threadSchema, type ChatApi } from "@/api/types";
+  threadSchema, requestStatusSchema, type ChatApi } from "@/api/types";
 
 function threadPath(id: string): string {
   if (!z.uuid().safeParse(id).success) throw new ApiError(0);
@@ -23,6 +23,16 @@ export const chatApi: ChatApi = {
       return thread;
     },
   }),
+  status: (id, requestId, signal) => {
+    if (!z.uuid().safeParse(requestId).success) throw new ApiError(0);
+    return requestJson(`${threadPath(id)}/requests/${requestId}/status`, {
+      signal, parse: (value) => {
+        const status = requestStatusSchema.parse(value);
+        if (status.request_id !== requestId) throw new ApiError(0);
+        return status;
+      },
+    });
+  },
   send: (id, body, csrfToken, signal) => requestJson(`${threadPath(id)}/messages`, {
     signal, csrfToken, method: "POST", body, timeout: 150000, parse: (value) => {
       const response = messageResponseSchema.parse(value);

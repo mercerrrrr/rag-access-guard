@@ -1,10 +1,11 @@
 """Short, thread-locked reservation and completion writes."""
 
 from dataclasses import dataclass
-from datetime import timedelta
-from typing import assert_never
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar, Literal, assert_never
 from uuid import UUID, uuid4
 
+from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 from sqlalchemy import insert, select, update
 
 from rag_access_guard import SourceRef
@@ -23,6 +24,39 @@ class ReleasedAnswer:
 
     body: str
     source_refs: tuple[SourceRef, ...]
+
+
+class RequestMetadata(BaseModel):
+    """The only persisted request fields available to the progress projection."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+    state: Literal["pending", "available", "neutral"]
+    lease_expires_at: AwareDatetime | None
+    created_at: AwareDatetime
+
+    @field_validator("created_at", "lease_expires_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime | None) -> datetime | None:
+        """Normalize PostgreSQL's configured timezone without changing the instant."""
+        return None if value is None else value.astimezone(UTC)
+
+
+async def load_request_metadata(
+    uow: ReadUoW, thread_id: UUID, request_id: UUID
+) -> RequestMetadata | None:
+    """Read no question, answer or sources after the caller proves thread ownership."""
+    row = (
+        (
+            await uow.connection.execute(
+                select(ChatTurn.state, ChatTurn.lease_expires_at, ChatTurn.created_at).where(
+                    ChatTurn.thread_id == thread_id, ChatTurn.request_id == request_id
+                )
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    return None if row is None else RequestMetadata.model_validate(row)
 
 
 async def load_turns(uow: ReadUoW, thread_id: UUID) -> tuple[StoredTurn, ...]:

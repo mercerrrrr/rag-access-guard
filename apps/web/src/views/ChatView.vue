@@ -10,10 +10,11 @@ import AppShell from "@/components/AppShell.vue";
 import AssistantWelcome from "@/components/AssistantWelcome.vue";
 import ChatComposer from "@/components/ChatComposer.vue";
 import ChatTurn from "@/components/ChatTurn.vue";
+import PendingQuestion from "@/components/PendingQuestion.vue";
+import RequestProgress from "@/components/RequestProgress.vue";
 import SourceList from "@/components/SourceList.vue";
 import SourceInspector from "@/components/SourceInspector.vue";
 import "@/styles/chat.css";
-
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -22,8 +23,12 @@ const guidance = createAssistantGuidance(demoApi, session);
 const draft = ref("");
 const composer = ref<{ focus(): void } | null>(null);
 const inspectorPanel = ref<HTMLElement | null>(null);
-const welcome = computed(() => !chat.thread.value?.turns.length
+const welcome = computed(() => !chat.pendingSubmission.value && !chat.thread.value?.turns.length
   && (route.params["threadId"] === undefined || chat.thread.value !== null));
+const localPending = computed(() => {
+  const pending = chat.pendingSubmission.value;
+  return pending && !chat.thread.value?.turns.some(turn => turn.request_id === pending.request_id) ? pending : null;
+});
 let viewEpoch = 0;
 watch(() => route.params["threadId"], async (id) => {
   const current = ++viewEpoch;
@@ -44,7 +49,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("focus", refreshGuidance);
   guidance.dispose(); chat.dispose();
 });
-
 async function chooseQuestion(question: string) {
   if (chat.loading.value || chat.sending.value || chat.retryRequest.value !== null) return;
   draft.value = question;
@@ -58,7 +62,6 @@ async function newConversation() {
   if (route.params["threadId"] !== undefined) { await router.push("/chat"); return; }
   await guidance.refresh();
 }
-
 async function chooseThread(event: Event) {
   if (!(event.target instanceof HTMLSelectElement)) return;
   await router.push(event.target.value ? `/chat/${event.target.value}` : "/chat");
@@ -73,11 +76,12 @@ async function refresh() {
   if (current === viewEpoch && welcome.value) await guidance.refresh();
 }
 async function send(input: string) {
-  await finishSubmission(await chat.sendQuestion(input));
+  await chat.sendQuestion(input);
 }
 async function retry() {
-  await finishSubmission(await chat.retry());
+  await chat.retry();
 }
+watch(chat.completedSubmission, (result) => { void finishSubmission(result ?? undefined); });
 async function finishSubmission(result: Awaited<ReturnType<typeof chat.sendQuestion>>) {
   if (!result || chat.thread.value?.id !== result.threadId || chat.retryRequest.value !== null) return;
   if (draft.value === result.userInput) draft.value = "";
@@ -157,14 +161,24 @@ async function selectTurn(id: string) {
           :turn="turn"
           :selected="chat.selectedTurn.value === turn.id"
           @select="selectTurn(turn.id)"
-        />
-        <p
-          v-if="chat.sending.value"
-          class="chat-hint"
-          role="status"
         >
-          Готовим ответ. Он появится после завершения серверной проверки.
-        </p>
+          <template #pending>
+            <RequestProgress
+              v-if="chat.pendingSubmission.value?.request_id === turn.request_id"
+              :phase="chat.progress.phase.value"
+              :elapsed="chat.progress.elapsed.value"
+            />
+            <p v-else>
+              Ответ ещё готовится. Обновите диалог позже.
+            </p>
+          </template>
+        </ChatTurn>
+        <PendingQuestion
+          v-if="localPending"
+          :input="localPending.user_input"
+          :phase="chat.progress.phase.value"
+          :elapsed="chat.progress.elapsed.value"
+        />
       </div>
       <div
         v-if="chat.message.value"

@@ -50,7 +50,12 @@ export const test = base.extend<{ scenario: Scenario; studentPage: Page; adminPa
     const created = await actors.student.context.request.post("/api/chat/threads", { headers: actors.student.headers, data: {} });
     expect(created.status()).toBe(201);
     const thread = threadSchema.parse(await created.json());
-    await actors.student.page.goto(`/chat/${thread.id}`);
+    await actors.student.page.getByRole("link", { name: "Чат", exact: true }).click();
+    await expect(actors.student.page).toHaveURL(`${origin}/chat`);
+    await actors.student.page.getByRole("button", { name: "Обновить", exact: true }).click();
+    await actors.student.page.getByLabel("Диалог", { exact: true }).selectOption(thread.id);
+    await expect(actors.student.page).toHaveURL(`${origin}/chat/${thread.id}`);
+    await expect(actors.student.page.getByLabel("Вопрос по документам", { exact: true })).toBeEnabled();
     try { await use({ documentId: document.id, threadId: thread.id, grantId: grant.id, title }); }
     finally {
       const removed = await actors.admin.context.request.delete(`/api/admin/documents/${document.id}/grants/${grant.id}`, { headers: actors.admin.headers });

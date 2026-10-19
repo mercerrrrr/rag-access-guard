@@ -16,6 +16,7 @@ from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.server import EVENT_LOOP_IMPORT
 from tests.e2e.guidance import seed_guidance
+from tests.e2e.progress_control import ProgressControl, mount_progress_control
 from tests.e2e.seed import disposable_database, seed_users
 from tests.integration.embedding_fixtures import DeterministicEmbedder
 from tests.integration.search_fixtures import configure_search
@@ -73,14 +74,16 @@ def main() -> None:
         configure_search(Path(temp) / "retrieval.json", environment)
         command.upgrade(Config(str(ROOT / "apps" / "api" / "alembic.ini")), "head")
         actors = seed_users(database_url, password)
+        progress_control = ProgressControl(ContextAnswer())
         with (
             patch.object(embeddings, "get_embedding_adapter", DeterministicEmbedder),
-            patch.object(llm, "get_llm_adapter", ContextAnswer),
+            patch.object(llm, "get_llm_adapter", lambda: progress_control),
         ):
             suggestions = Path(temp) / "guidance/suggestions.json"
             environment.setenv("RAG_ACCESS_GUARD_SUGGESTIONS_PATH", str(suggestions))
             seed_guidance(database_url, actors, password, suggestions)
             application = create_app()
+            mount_progress_control(application, progress_control, password)
             mount_web(application)
             uvicorn.run(
                 application,

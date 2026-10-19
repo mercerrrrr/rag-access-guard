@@ -25,6 +25,7 @@ from rag_access_guard_api.routes.sources import build_sources_router
 from rag_access_guard_api.routes.system import build_system_router
 from rag_access_guard_api.routes.users import build_users_router
 from rag_access_guard_api.services.auth import AuthService
+from rag_access_guard_api.services.chat_progress import RequestProgressTracker
 from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.text_documents import MAX_UPLOAD_BYTES
 
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     settings = Settings()
     engine = create_database_engine(settings)
     auth = AuthService(engine, settings)
+    progress = RequestProgressTracker()
     runtime: InferenceRuntime | None = None
 
     @asynccontextmanager
@@ -82,7 +84,7 @@ def create_app() -> FastAPI:
     application.add_middleware(InferenceScopeMiddleware, get_runtime=lambda: runtime)
 
     application.include_router(build_auth_router(auth, settings))
-    application.include_router(build_chat_router(PolicyUnitOfWork(engine), settings))
+    application.include_router(build_chat_router(PolicyUnitOfWork(engine), settings, progress))
     application.include_router(build_demo_router(PolicyUnitOfWork(engine), settings))
     application.include_router(build_documents_router(engine, settings))
     application.include_router(build_search_router(engine, settings))

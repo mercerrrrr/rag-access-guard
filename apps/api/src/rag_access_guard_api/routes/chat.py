@@ -9,6 +9,7 @@ from rag_access_guard_api.adapters import llm
 from rag_access_guard_api.adapters.inference_runtime import InferenceUnavailableError
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.routes.auth import AuthCookies, check_origin
+from rag_access_guard_api.routes.chat_progress import build_chat_progress_router
 from rag_access_guard_api.schemas.chat import (
     CreateThread,
     MessageRequest,
@@ -18,6 +19,7 @@ from rag_access_guard_api.schemas.chat import (
 )
 from rag_access_guard_api.schemas.search import SearchError
 from rag_access_guard_api.services.chat import ChatService
+from rag_access_guard_api.services.chat_progress import RequestProgressTracker
 from rag_access_guard_api.services.chat_read import read_thread
 from rag_access_guard_api.services.chat_repository import (
     create_thread,
@@ -30,9 +32,12 @@ from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.tokens import matches_token
 
 
-def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter:  # noqa: C901
+def build_chat_router(  # noqa: C901
+    policy: PolicyUnitOfWork, settings: Settings, progress: RequestProgressTracker
+) -> APIRouter:
     """Bind every operation to the same policy-first session gate."""
     router = APIRouter(prefix="/api/chat/threads", tags=["chat"])
+    router.include_router(build_chat_progress_router(policy, settings, progress))
     cookies = AuthCookies(settings.loopback_development)
 
     @router.post("", status_code=201)
@@ -81,6 +86,7 @@ def build_chat_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter
                 credentials.csrf,
                 generation_timeout_seconds=settings.generation_timeout_seconds,
                 pending_lease_seconds=settings.pending_lease_seconds,
+                progress=progress,
             ).generate_turn(credentials.session, thread_id, payload)
         except QueryTooLongError:
             raise

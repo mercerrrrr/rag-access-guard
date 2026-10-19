@@ -19,6 +19,7 @@ export function chatApi(overrides: Partial<ChatApi> = {}): ChatApi {
   return {
     list: () => Promise.resolve([thread]), create: () => Promise.resolve(thread),
     detail: (id) => Promise.resolve({ ...thread, id }), send: () => Promise.resolve(reply),
+    status: (_id, requestId) => Promise.resolve({ request_id: requestId, state: "absent", stage: null, elapsed_seconds: null }),
     source: () => Promise.resolve({ ...source, text: "Защищённый текст" }), ...overrides,
   };
 }
