@@ -11,7 +11,7 @@ import psutil
 from anyio.to_thread import run_sync
 from pydantic import ValidationError
 
-from rag_access_guard_api.adapters.e5_artifacts import verify_e5_artifacts
+from rag_access_guard_api.adapters.e5_artifacts import verify_e5_files
 from rag_access_guard_api.adapters.inference_runtime import current_runtime
 from rag_access_guard_api.adapters.model_tokens import get_model_counter
 from rag_access_guard_api.adapters.ollama_http import create_client
@@ -87,7 +87,7 @@ class SystemReadiness:
             path = Path(
                 os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}")
             )
-            _ = verify_e5_artifacts(path)
+            verify_e5_files(path)
 
         try:
             await run_sync(verify, abandon_on_cancel=True)
