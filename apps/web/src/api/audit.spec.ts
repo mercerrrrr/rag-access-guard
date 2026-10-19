@@ -2,11 +2,22 @@
 import { afterAll, beforeEach, expect, it, vi } from "vitest";
 import { auditApi, parseAuditEvent } from "@/api/audit";
 import { auditEvent } from "@/test/audit";
+import { eventLabels } from "@/auditLabels";
 beforeEach(() => {
   vi.stubGlobal("window", { location: { origin: "http://localhost" } });
   vi.stubGlobal("document", { body: { innerHTML: "" } });
 });
 afterAll(() => vi.unstubAllGlobals());
+it("accepts_and_filters_the_closed_assistant_help_event", async () => {
+  const help = { ...auditEvent, event_type: "assistant_help", stage: "release", outcome: "success", source_count: 0 };
+  expect(parseAuditEvent(help)).toEqual(help);
+  let sent: Request | undefined;
+  vi.stubGlobal("fetch", (request: Request) => { sent = request; return Promise.resolve(Response.json({ items: [help], next_cursor: null })); });
+  await expect(auditApi.list({ event_type: "assistant_help" }, null, new AbortController().signal))
+    .resolves.toMatchObject({ items: [help] });
+  expect(new URL(sent?.url ?? "http://missing").searchParams.get("event_type")).toBe("assistant_help");
+  expect(eventLabels.assistant_help).toBe("Справка помощника");
+});
 it.each([{ id: "bad" }, { event_type: "arbitrary" }, { stage: "secret" }, { outcome: "unknown" },
   { occurred_at: "2026-09-22T12:00:00" }, { source_count: -1 }, { policy_revision: 1.5 }])(
   "rejects_invalid_audit_row_%j", patch => { expect(() => parseAuditEvent({ ...auditEvent, ...patch })).toThrow(); },

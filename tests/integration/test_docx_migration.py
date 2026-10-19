@@ -47,7 +47,7 @@ def test_docx_migration_preserves_old_formats_and_refuses_docx_loss(
         )
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0014_demo_seed_state"
+            == "0015_assistant_help"
         )
         assert (
             connection.execute(
@@ -90,7 +90,7 @@ def test_downgrade_refuses_incompatible_mime_width(
     with auth_database.connect() as connection:
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0014_demo_seed_state"
+            == "0015_assistant_help"
         )
         assert (
             connection.execute(

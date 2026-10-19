@@ -11,9 +11,10 @@ from pydantic import BaseModel, ConfigDict
 
 from rag_access_guard import PreparedContext
 from rag_access_guard_api.schemas.chat import MessageRequest, NeutralTurn
+from rag_access_guard_api.services.assistant_help import HELP_MESSAGE
 
 type NeutralReason = Literal[
-    "no_context", "generation_unavailable", "policy_changed", "interrupted"
+    "no_context", "generation_unavailable", "policy_changed", "interrupted", "assistant_help"
 ]
 type ConflictReason = Literal["thread_conflict", "request_conflict", "request_in_progress"]
 
@@ -77,6 +78,8 @@ def request_hash(request: MessageRequest) -> bytes:
 def neutral_view(turn: StoredTurn, reason: NeutralReason) -> NeutralTurn:
     """Choose only a closed server message, never model or exception text."""
     match reason:
+        case "assistant_help":
+            message = HELP_MESSAGE
         case "no_context":
             message = "Нет доступных источников для ответа."
         case "generation_unavailable":

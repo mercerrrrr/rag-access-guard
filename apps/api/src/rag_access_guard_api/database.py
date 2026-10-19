@@ -15,7 +15,7 @@ from rag_access_guard_api.config import (
     Settings,
 )
 
-EXPECTED_ALEMBIC_REVISION: Final = "0014_demo_seed_state"
+EXPECTED_ALEMBIC_REVISION: Final = "0015_assistant_help"
 EXPECTED_PGVECTOR_VERSION: Final = "0.8.6"
 EXPECTED_POSTGRESQL_MAJOR: Final = 18
 

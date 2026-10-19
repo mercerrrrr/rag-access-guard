@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const HELP_MESSAGE = "Я помогаю искать ответы в доступных документах. "
+  + "Задайте конкретный вопрос или выберите пример. "
+  + "Специальные команды не нужны. Источники ответа можно открыть в разделе «Источники ответа».";
+
 export const sourceSchema = z.object({
   document_id: z.uuid(), document_version_id: z.uuid(), chunk_id: z.uuid(),
   title: z.string(), url: z.string(),
@@ -26,6 +30,7 @@ export const turnSchema = z.discriminatedUnion("state", [
   z.object({ ...turnIdentity, ...emptyAnswer, state: z.literal("neutral"), message: z.enum([
     "Нет доступных источников для ответа.", "Не удалось получить ответ. Повторите запрос.",
     "Права изменились во время ответа. Повторите запрос.", "Генерация прервана. Отправьте новый запрос.",
+    HELP_MESSAGE,
   ]) }),
   z.object({ ...turnIdentity, ...emptyAnswer, state: z.literal("unavailable"),
     message: z.literal("Ответ недоступен: права на один из источников изменились.") }),

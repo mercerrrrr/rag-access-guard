@@ -79,7 +79,7 @@ def test_v010_head_upgrade_preserves_rows_and_does_not_adopt_database(
                 assert after == before
                 assert (
                     connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                    == "0014_demo_seed_state"
+                    == "0015_assistant_help"
                 )
                 assert (
                     connection.execute(text("SELECT count(*) FROM demo_seed_state")).scalar_one()

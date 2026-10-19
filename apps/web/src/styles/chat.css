@@ -8,6 +8,9 @@
 .chat-empty { padding-block: var(--space-6); max-inline-size: var(--measure-reading); }
 .chat-empty h2 { font-size: var(--font-size-section); line-height: var(--line-height-section); font-weight: var(--font-weight-medium); }
 .chat-empty p, .chat-hint { color: var(--color-text-secondary); }
+.assistant-suggestions { list-style: none; padding: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.assistant-suggestions li { max-inline-size: 100%; }
+.assistant-suggestions .session-button { max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .chat-turn { padding-block: var(--space-5); border-block-end: var(--border-size-thin) solid var(--color-border); }
 .chat-turn:first-child { padding-block-start: 0; }
 .chat-turn section + section { margin-block-start: var(--space-5); }

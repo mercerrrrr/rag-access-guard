@@ -64,7 +64,7 @@ const contextMessage = computed(() => route.meta.contextMessage);
     </aside>
 
     <header class="utility-header">
-      <span class="utility-header__title">Корпоративный поиск</span>
+      <span class="utility-header__title">Помощник по базе знаний</span>
       <div
         v-if="session.user.value"
         class="session-identity"

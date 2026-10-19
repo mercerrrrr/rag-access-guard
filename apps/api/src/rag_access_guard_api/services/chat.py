@@ -26,11 +26,11 @@ from rag_access_guard_api.config import (
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError
 from rag_access_guard_api.schemas.search import SearchError
-from rag_access_guard_api.services import chat_completion
-from rag_access_guard_api.services.chat_completion import ChatCompletion
+from rag_access_guard_api.services import chat_completion, security
+from rag_access_guard_api.services import chat_reservation as turns
+from rag_access_guard_api.services.assistant_help import classify_help
 from rag_access_guard_api.services.chat_release import Generated, Neutral, StaleGeneration
 from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
-from rag_access_guard_api.services.chat_reservation import active_lease, reserve, resolve_request
 from rag_access_guard_api.services.chat_state import ChatConflict, GenerationAttempt, Reservation
 from rag_access_guard_api.services.errors import ForbiddenError
 from rag_access_guard_api.services.origin import InvalidOriginError
@@ -41,7 +41,7 @@ from rag_access_guard_api.services.origin_context import (
 )
 from rag_access_guard_api.services.query_validation import validate_query
 from rag_access_guard_api.services.retrieval import retrieve
-from rag_access_guard_api.services.security import PolicyUnitOfWork, database_clock
+from rag_access_guard_api.services.security import database_clock
 from rag_access_guard_api.services.tokens import matches_token
 
 MAX_ANSWER_BYTES: Final = 65536
@@ -53,7 +53,7 @@ Completion = chat_completion.Completion
 class ChatService:
     """Bind one HTTP request's CSRF proof to each fresh session transaction."""
 
-    policy: PolicyUnitOfWork
+    policy: security.PolicyUnitOfWork
     csrf_token: str = field(repr=False)
     generation_timeout_seconds: int = GENERATION_TIMEOUT_SECONDS
     pending_lease_seconds: int = PENDING_LEASE_SECONDS
@@ -70,7 +70,12 @@ class ChatService:
             principal_id = uow.principal.principal_id
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
-            resolved = await resolve_request(uow, thread_id, request, session_token=session_token)
+            resolved = await turns.resolve_request(
+                uow, thread_id, request, session_token=session_token
+            )
+            if resolved is None and classify_help(request.user_input) == "assistant_help":
+                resolved = await turns.complete_help(uow, thread_id, request)
+                await security.revalidate_session(uow, session_token)
         if resolved is not None:
             return resolved
         counter = await run_sync(llm.get_token_counter)
@@ -87,7 +92,7 @@ class ChatService:
         async with self.policy.protected_read(session_token) as uow:
             if not matches_token(self.csrf_token, uow.csrf_digest):
                 raise ForbiddenError
-            reserved = await reserve(
+            reserved = await turns.reserve(
                 uow,
                 thread_id,
                 request,
@@ -227,7 +232,7 @@ class ChatService:
                 or not matches_token(self.csrf_token, uow.csrf_digest)
             ):
                 raise ForbiddenError
-            expiry = await active_lease(uow, reservation, session_token=session_token)
+            expiry = await turns.active_lease(uow, reservation, session_token=session_token)
             now = await database_clock(uow.connection)
             if expiry is None or now >= expiry:
                 return False
@@ -252,6 +257,6 @@ class ChatService:
         *,
         expected_attempt: Reservation,
     ) -> Completion:
-        return await ChatCompletion(self.policy, self.csrf_token).complete(
+        return await chat_completion.ChatCompletion(self.policy, self.csrf_token).complete(
             session_token, outcome, expected_attempt=expected_attempt
         )

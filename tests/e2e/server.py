@@ -15,6 +15,7 @@ from starlette.staticfiles import StaticFiles
 from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.server import EVENT_LOOP_IMPORT
+from tests.e2e.guidance import seed_guidance
 from tests.e2e.seed import disposable_database, seed_users
 from tests.integration.embedding_fixtures import DeterministicEmbedder
 from tests.integration.search_fixtures import configure_search
@@ -24,7 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ContextAnswer:
     async def generate(self, *, user_input: str, system_supplied_context: str) -> str:
-        del user_input
+        if user_input == "Привет!":
+            message = "Help must not call the model"
+            raise AssertionError(message)
         if "SYNTHETIC_REVOKE_57" in system_supplied_context:
             return "SYNTHETIC_REVOKE_57"
         return "SYNTHETIC_OTHER_57"
@@ -63,14 +66,20 @@ def main() -> None:
         environment.setenv("RAG_ACCESS_GUARD_AUTH_LIMIT_SECRET", secrets.token_hex(32))
         environment.setenv("RAG_ACCESS_GUARD_AUTH_ORIGIN", "http://127.0.0.1:54174")
         environment.setenv("RAG_ACCESS_GUARD_LOOPBACK_DEVELOPMENT", "true")
-        environment.setenv("RAG_ACCESS_GUARD_LLM_ADAPTER", "fake")
+        environment.setenv(
+            "RAG_ACCESS_GUARD_LLM_ADAPTER",
+            "disabled" if os.environ.get("RAG_E2E_DISABLE_MODEL") == "1" else "fake",
+        )
         configure_search(Path(temp) / "retrieval.json", environment)
         command.upgrade(Config(str(ROOT / "apps" / "api" / "alembic.ini")), "head")
-        _ = seed_users(database_url, password)
+        actors = seed_users(database_url, password)
         with (
             patch.object(embeddings, "get_embedding_adapter", DeterministicEmbedder),
             patch.object(llm, "get_llm_adapter", ContextAnswer),
         ):
+            suggestions = Path(temp) / "guidance/suggestions.json"
+            environment.setenv("RAG_ACCESS_GUARD_SUGGESTIONS_PATH", str(suggestions))
+            seed_guidance(database_url, actors, password, suggestions)
             application = create_app()
             mount_web(application)
             uvicorn.run(

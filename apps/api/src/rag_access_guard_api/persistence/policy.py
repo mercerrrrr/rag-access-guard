@@ -31,6 +31,7 @@ type AuditEventType = Literal[
     "grant_added",
     "grant_removed",
     "access_checked",
+    "assistant_help",
 ]
 type AuditStage = Literal["authentication", "policy", "retrieval", "context", "release", "read"]
 type AuditOutcome = Literal["allowed", "denied", "success", "failure"]
@@ -63,7 +64,8 @@ class AuditEvent:
             """event_type IN (
                 'session_created', 'session_revoked', 'login_denied',
                 'user_changed', 'role_changed', 'membership_added', 'membership_removed',
-                'document_changed', 'grant_added', 'grant_removed', 'access_checked'
+                'document_changed', 'grant_added', 'grant_removed',
+                'access_checked', 'assistant_help'
             )""",
             name="ck_audit_events_event_type",
         ),

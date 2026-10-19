@@ -61,6 +61,7 @@ def test_reports_unavailable_when_database_cannot_be_reached(
     ) == ExpectedUnavailableHealth(detail="Service unavailable")
 
 
+@pytest.mark.usefixtures("schema_connection")
 def test_reports_ready_when_database_baseline_is_current() -> None:
     # Given
     application = create_app()
@@ -89,6 +90,7 @@ def test_reports_ready_when_database_baseline_is_current() -> None:
     ],
     ids=["stale-revision", "wrong-pgvector", "wrong-postgresql"],
 )
+@pytest.mark.usefixtures("schema_connection")
 def test_reports_unavailable_when_database_baseline_differs(
     monkeypatch: pytest.MonkeyPatch,
     expected_name: str,

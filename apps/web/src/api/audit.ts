@@ -4,7 +4,7 @@ import { ApiError } from "@/api/errors";
 
 export const auditEventTypes = ["session_created", "session_revoked", "login_denied", "user_changed",
   "role_changed", "membership_added", "membership_removed", "document_changed", "grant_added",
-  "grant_removed", "access_checked"] as const;
+  "grant_removed", "access_checked", "assistant_help"] as const;
 export const auditStages = ["authentication", "policy", "retrieval", "context", "release", "read"] as const;
 export const auditOutcomes = ["allowed", "denied", "success", "failure"] as const;
 const auditEventSchema = z.object({

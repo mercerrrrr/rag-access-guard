@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
+from starlette.requests import ClientDisconnect
 
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.persistence import DemoSeedState
@@ -13,6 +14,15 @@ from rag_access_guard_api.schemas.system import SystemStatus
 from rag_access_guard_api.services.evaluation_identity import evaluation_metadata
 from rag_access_guard_api.services.security import PolicyUnitOfWork
 from rag_access_guard_api.services.system_status import SystemReadiness
+
+
+async def _check_empty_request(request: Request) -> None:
+    try:
+        unexpected = request.query_params or await request.body()
+    except ClientDisconnect:
+        raise HTTPException(400, "Invalid request") from None
+    if unexpected:
+        raise HTTPException(422, "Invalid request")
 
 
 def build_system_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRouter:
@@ -27,8 +37,7 @@ def build_system_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRout
         credentials = cookies.credentials(request)
         async with policy.protected_read(credentials.session):
             pass
-        if request.query_params or await request.body():
-            raise HTTPException(422, "Invalid request")
+        await _check_empty_request(request)
         result = await readiness.snapshot()
         async with policy.protected_read(credentials.session):
             return result
@@ -39,8 +48,7 @@ def build_system_router(policy: PolicyUnitOfWork, settings: Settings) -> APIRout
         credentials = cookies.credentials(request)
         async with policy.protected_read(credentials.session):
             pass
-        if request.query_params or await request.body():
-            raise HTTPException(422, "Invalid request")
+        await _check_empty_request(request)
         try:
             metadata = evaluation_metadata(settings, await readiness.snapshot())
         except (InferenceUnavailableError, RetrievalNotConfiguredError):

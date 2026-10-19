@@ -51,6 +51,7 @@ class AuthCacheMiddleware(BaseHTTPMiddleware):
                 "/api/search",
                 "/api/chat/",
                 "/api/system/",
+                "/api/demo/",
             )
         ):
             response.headers["Cache-Control"] = "private, no-store"
@@ -159,6 +160,7 @@ def register_auth_errors(app: FastAPI) -> None:
                     "/api/search",
                     "/api/chat/",
                     "/api/system/",
+                    "/api/demo/",
                 )
             )
             else None

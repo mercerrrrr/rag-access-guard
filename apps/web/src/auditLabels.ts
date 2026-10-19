@@ -4,6 +4,7 @@ export const eventLabels: Record<AuditEventView["event_type"], string> = {
   user_changed: "Пользователь изменён", role_changed: "Роль изменена", membership_added: "Участник добавлен",
   membership_removed: "Участник исключён", document_changed: "Документ изменён", grant_added: "Разрешение выдано",
   grant_removed: "Разрешение отозвано", access_checked: "Доступ проверен",
+  assistant_help: "Справка помощника",
 };
 export const stageLabels: Record<AuditEventView["stage"], string> = {
   authentication: "Аутентификация", policy: "Политика", retrieval: "Поиск", context: "Контекст", release: "Выдача", read: "Чтение",

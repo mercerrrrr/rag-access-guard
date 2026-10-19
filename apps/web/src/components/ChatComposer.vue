@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { ref } from "vue";
 const input = defineModel<string>({ default: "" });
 const props = defineProps<{ readonly disabled: boolean; readonly sending: boolean }>();
 const emit = defineEmits<{ send: [input: string]; cancel: [] }>();
+const textarea = ref<HTMLTextAreaElement | null>(null);
+defineExpose({ focus: () => textarea.value?.focus() });
 function submit() { if (!props.disabled && input.value.trim()) emit("send", input.value); }
 function keydown(event: KeyboardEvent) {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -19,6 +22,7 @@ function keydown(event: KeyboardEvent) {
     <label for="chat-question">Вопрос по документам</label>
     <textarea
       id="chat-question"
+      ref="textarea"
       v-model="input"
       rows="3"
       :disabled="disabled"

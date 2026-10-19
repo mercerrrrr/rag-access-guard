@@ -1,16 +1,23 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { chatApi } from "@/api/chat";
+import { demoApi } from "@/api/demo";
 import { ApiError } from "@/api/errors";
 import { sessionKey } from "@/composables/sessionContext";
 import { createSessionState } from "@/composables/useSession";
 import { reply, source, thread } from "@/test/chat";
 import { sessionApi } from "@/test/session";
+import { profile, system } from "@/test/demo";
 import ChatView from "@/views/ChatView.vue";
 import type { ThreadDetail } from "@/api/types";
 
 afterEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.spyOn(demoApi, "suggestions").mockResolvedValue({ items: [], policy_revision: 0 });
+  vi.spyOn(demoApi, "profile").mockResolvedValue(profile);
+  vi.spyOn(demoApi, "status").mockResolvedValue(system);
+});
 
 it("successful_first_message_retry_clears_draft_and_opens_saved_route", async () => {
   let detail: ThreadDetail = thread;

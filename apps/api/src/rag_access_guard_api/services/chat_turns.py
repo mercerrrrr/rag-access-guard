@@ -123,7 +123,13 @@ async def complete_turn(
                 )
             count = len(set(refs))
             outcome = "allowed"
-        case "no_context" | "generation_unavailable" | "policy_changed" | "interrupted":
+        case (
+            "no_context"
+            | "generation_unavailable"
+            | "policy_changed"
+            | "interrupted"
+            | "assistant_help"
+        ):
             _ = await uow.connection.execute(
                 update(ChatTurn)
                 .where(ChatTurn.id == turn.id)
@@ -139,13 +145,13 @@ async def complete_turn(
                 )
             )
             count = 0
-            outcome = "denied"
+            outcome = "success" if result == "assistant_help" else "denied"
         case _:
             assert_never(result)
     await write_audit(
         uow.connection,
         AuditRecord(
-            event_type="access_checked",
+            event_type="assistant_help" if result == "assistant_help" else "access_checked",
             stage="release",
             outcome=outcome,
             actor_user_id=uow.principal.principal_id,

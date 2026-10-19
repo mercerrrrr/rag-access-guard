@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     loopback_development: bool = False
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
+    suggestions_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
     model_profile: ProfileId = "qwen3-thinking-legacy-v1"
     e5_execution: Literal["isolated", "resident"] = "isolated"

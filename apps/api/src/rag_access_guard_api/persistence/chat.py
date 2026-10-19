@@ -72,7 +72,7 @@ class ChatTurn:
             OR (state='neutral' AND answer IS NULL AND completed_at IS NOT NULL
              AND ordinal IS NOT NULL AND ordinal > 0 AND NOT provenance_complete
              AND server_generated_neutral AND neutral_reason IN
-             ('no_context','generation_unavailable','policy_changed','interrupted'))
+             ('no_context','generation_unavailable','policy_changed','interrupted','assistant_help'))
             ) IS TRUE""",
             name="ck_chat_turns_state",
         ),

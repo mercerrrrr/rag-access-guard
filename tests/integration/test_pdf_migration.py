@@ -46,7 +46,7 @@ def test_pdf_migration_preserves_text_and_refuses_pdf_data_loss(
         )
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0014_demo_seed_state"
+            == "0015_assistant_help"
         )
 
 

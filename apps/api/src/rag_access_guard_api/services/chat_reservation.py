@@ -98,3 +98,14 @@ async def reserve(
         request.request_id,
         thread.revision,
     )
+
+
+async def complete_help(uow: ReadUoW, thread_id: UUID, request: MessageRequest) -> MessageResponse:
+    """Finalize local help in the caller's resolved, owner-checked thread transaction."""
+    await insert_pending(uow, thread_id, request)
+    turn = next(t for t in await load_turns(uow, thread_id) if t.request_id == request.request_id)
+    revision = await complete_turn(uow, turn, "assistant_help")
+    completed = next(t for t in await load_turns(uow, thread_id) if t.id == turn.id)
+    return MessageResponse(
+        thread_revision=revision, turn=await read_turn(uow, completed), replayed=False
+    )

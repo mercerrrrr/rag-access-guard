@@ -6,6 +6,24 @@ import { ApiError, errorMessage } from "@/api/errors";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+it("accepts_only_the_closed_source_free_help_response", async () => {
+  const message = "Я помогаю искать ответы в доступных документах. "
+    + "Задайте конкретный вопрос или выберите пример. "
+    + "Специальные команды не нужны. Источники ответа можно открыть в разделе «Источники ответа».";
+  const help = { ...reply, turn: { ...reply.turn, state: "neutral", answer: null, sources: [], message } };
+  vi.stubGlobal("fetch", () => Promise.resolve(Response.json(help)));
+  await expect(chatApi.send(thread.id, { request_id: reply.turn.request_id,
+    user_input: reply.turn.user_input, expected_thread_revision: 0 }, "csrf", new AbortController().signal))
+    .resolves.toEqual(help);
+  for (const rejected of [message.replace("в разделе «Источники ответа»", "справа"), "Arbitrary source-free answer"]) {
+    vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ ...help,
+      turn: { ...help.turn, message: rejected } })));
+    await expect(chatApi.send(thread.id, { request_id: reply.turn.request_id,
+      user_input: reply.turn.user_input, expected_thread_revision: 0 }, "csrf", new AbortController().signal))
+      .rejects.toMatchObject({ status: 0 });
+  }
+});
+
 it("too_long_query_has_a_closed_user_message", async () => {
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ detail: { code: "query_too_long" } }, { status: 422 })));
   const result = await chatApi.send(thread.id, { request_id: reply.turn.request_id,

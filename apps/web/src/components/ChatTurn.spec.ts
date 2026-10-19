@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import ChatTurn from "@/components/ChatTurn.vue";
 import { reply } from "@/test/chat";
 import type { TurnView } from "@/api/types";
+import { HELP_MESSAGE } from "@/api/types";
 
 it("llm_url_is_plain_text", () => {
   const wrapper = mount(ChatTurn, { props: {
@@ -18,6 +19,7 @@ it("llm_url_is_plain_text", () => {
 it.each([
   { ...reply.turn, state: "pending", answer: null, sources: [], message: null },
   { ...reply.turn, state: "neutral", answer: null, sources: [], message: "Нет доступных источников для ответа." },
+  { ...reply.turn, state: "neutral", answer: null, sources: [], message: HELP_MESSAGE },
 ] satisfies readonly TurnView[])("renders $state without an answer-source action", turn => {
   const wrapper = mount(ChatTurn, { props: { turn } });
   expect(wrapper.get('[aria-label="Ответ"]').text()).not.toContain("Защищённый ответ");

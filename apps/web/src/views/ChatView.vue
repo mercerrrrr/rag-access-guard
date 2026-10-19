@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { chatApi } from "@/api/chat";
+import { demoApi } from "@/api/demo";
+import { createAssistantGuidance } from "@/composables/useAssistantGuidance";
 import { createChatState } from "@/composables/useChat";
 import { useSession } from "@/composables/sessionContext";
 import AppShell from "@/components/AppShell.vue";
+import AssistantWelcome from "@/components/AssistantWelcome.vue";
 import ChatComposer from "@/components/ChatComposer.vue";
 import ChatTurn from "@/components/ChatTurn.vue";
 import SourceList from "@/components/SourceList.vue";
@@ -13,25 +16,61 @@ import "@/styles/chat.css";
 
 const route = useRoute();
 const router = useRouter();
-const chat = createChatState(chatApi, useSession());
+const session = useSession();
+const chat = createChatState(chatApi, session);
+const guidance = createAssistantGuidance(demoApi, session);
 const draft = ref("");
+const composer = ref<{ focus(): void } | null>(null);
 const inspectorPanel = ref<HTMLElement | null>(null);
+const welcome = computed(() => !chat.thread.value?.turns.length
+  && (route.params["threadId"] === undefined || chat.thread.value !== null));
+let viewEpoch = 0;
 watch(() => route.params["threadId"], async (id) => {
+  const current = ++viewEpoch;
+  guidance.clear();
   draft.value = "";
   if (typeof id === "string") await chat.loadThread(id);
   else chat.newThread();
+  if (current !== viewEpoch) return;
   await chat.listThreads();
+  if (current === viewEpoch && welcome.value) await guidance.refresh();
 }, { immediate: true });
-onBeforeUnmount(chat.dispose);
+function refreshGuidance() {
+  if (welcome.value && !chat.loading.value && !chat.sending.value) void guidance.refresh();
+}
+onMounted(() => { window.addEventListener("focus", refreshGuidance); });
+onBeforeUnmount(() => {
+  viewEpoch += 1;
+  window.removeEventListener("focus", refreshGuidance);
+  guidance.dispose(); chat.dispose();
+});
+
+async function chooseQuestion(question: string) {
+  if (chat.loading.value || chat.sending.value || chat.retryRequest.value !== null) return;
+  draft.value = question;
+  await nextTick();
+  composer.value?.focus();
+}
+async function newConversation() {
+  viewEpoch += 1;
+  guidance.clear(); draft.value = "";
+  chat.newThread();
+  if (route.params["threadId"] !== undefined) { await router.push("/chat"); return; }
+  await guidance.refresh();
+}
 
 async function chooseThread(event: Event) {
   if (!(event.target instanceof HTMLSelectElement)) return;
   await router.push(event.target.value ? `/chat/${event.target.value}` : "/chat");
 }
 async function refresh() {
+  const current = ++viewEpoch;
+  guidance.clear();
   const id = chat.thread.value?.id ?? route.params["threadId"];
   if (typeof id === "string") await chat.loadThread(id);
+  if (current !== viewEpoch) return;
   await chat.listThreads();
+  if (current === viewEpoch && welcome.value) await guidance.refresh();
 }
 async function send(input: string) {
   await finishSubmission(await chat.sendQuestion(input));
@@ -78,7 +117,7 @@ async function selectTurn(id: string) {
           <button
             class="session-button"
             type="button"
-            @click="chat.newThread(); draft = ''; router.push('/chat')"
+            @click="newConversation"
           >
             Новый
           </button>
@@ -102,13 +141,16 @@ async function selectTurn(id: string) {
         >
           Загружаем диалог…
         </p>
-        <div
-          v-else-if="!chat.thread.value?.turns.length"
-          class="chat-empty"
-        >
-          <h2>Задайте вопрос по доступным документам</h2>
-          <p>Ответ появится целиком после проверки прав. Источники можно открыть в правой панели.</p>
-        </div>
+        <AssistantWelcome
+          v-else-if="welcome"
+          :items="guidance.items.value"
+          :profile="guidance.profile.value"
+          :system="guidance.system.value"
+          :loading="guidance.loading.value"
+          :disabled="chat.sending.value || chat.retryRequest.value !== null"
+          :message="guidance.message.value"
+          @choose="chooseQuestion"
+        />
         <ChatTurn
           v-for="turn in chat.thread.value?.turns ?? []"
           :key="turn.id"
@@ -153,6 +195,7 @@ async function selectTurn(id: string) {
         </button>
       </div>
       <ChatComposer
+        ref="composer"
         v-model="draft"
         :disabled="chat.loading.value || chat.sending.value || chat.retryRequest.value !== null
           || (route.params['threadId'] !== undefined && chat.thread.value === null)"
