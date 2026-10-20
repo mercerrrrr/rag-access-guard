@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DocumentEntry } from "@/api/documentTypes";
+import SourceOrigin from "@/components/SourceOrigin.vue";
 defineProps<{ documents: readonly DocumentEntry[]; selectedId: string | null; busy: boolean }>();
 defineEmits<{ select: [id: string] }>();
 </script>
@@ -28,6 +29,7 @@ defineEmits<{ select: [id: string] }>();
             class="document-list__state"
           >Нет активной версии</span>
         </button>
+        <SourceOrigin :origin="document.origin" />
       </li>
     </ul>
   </section>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DocumentVersion } from "@/api/documentTypes";
+import SourceOrigin from "@/components/SourceOrigin.vue";
 defineProps<{
   versions: readonly DocumentVersion[];
   canReadContent: boolean;
@@ -31,6 +32,7 @@ const labels = { stored: "Сохранено", chunked: "Разбито на ф�
             {{ version.content_sha256 }}
           </dd>
         </dl>
+        <SourceOrigin :origin="version.origin" />
         <button
           v-if="canReadContent && version.id === activeVersionId"
           type="button"

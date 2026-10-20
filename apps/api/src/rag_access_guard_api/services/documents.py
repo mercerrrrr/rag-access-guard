@@ -8,9 +8,12 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from rag_access_guard_api.persistence import Document, DocumentVersion
 from rag_access_guard_api.schemas.documents import DocumentSummary, DocumentVersionSummary
+from rag_access_guard_api.schemas.origin import DocumentOrigin
+from rag_access_guard_api.services.access import DocumentVersionRef, can_read_version
 from rag_access_guard_api.services.audit import AuditRecord
 from rag_access_guard_api.services.errors import ForbiddenError
 from rag_access_guard_api.services.ingestion import PreparedUpload, activate_version, store_version
+from rag_access_guard_api.services.origin import read_version_origin
 from rag_access_guard_api.services.security import MutationUoW, ReadUoW
 from rag_access_guard_api.services.text_documents import DocumentError, validate_title
 
@@ -115,14 +118,32 @@ async def update_document(
 
 
 async def list_documents(uow: ReadUoW) -> list[DocumentSummary]:
-    """Select only administrative metadata in a stable order."""
+    """List metadata with provenance only for content-readable active versions."""
     require_admin(uow)
     rows = (
         await uow.connection.execute(
             select(*_summary_columns()).order_by(Document.created_at, Document.id)
         )
     ).mappings()
-    return [DocumentSummary.model_validate(row) for row in rows]
+    documents: list[DocumentSummary] = []
+    for row in rows:
+        document = DocumentSummary.model_validate(row)
+        origin = (
+            await _read_allowed_origin(
+                uow, DocumentVersionRef(document.id, document.active_version_id)
+            )
+            if document.active_version_id is not None
+            else None
+        )
+        documents.append(document.model_copy(update={"origin": origin}))
+    return documents
+
+
+async def _read_allowed_origin(uow: ReadUoW, ref: DocumentVersionRef) -> DocumentOrigin | None:
+    """Keep administrative metadata authority separate from content authorization."""
+    if not (await can_read_version(uow, ref)).allowed:
+        return None
+    return await read_version_origin(uow.connection, ref.document_version_id)
 
 
 async def list_versions(uow: ReadUoW, document_id: UUID) -> list[DocumentVersionSummary]:
@@ -146,4 +167,9 @@ async def list_versions(uow: ReadUoW, document_id: UUID) -> list[DocumentVersion
             .order_by(DocumentVersion.created_at, DocumentVersion.id)
         )
     ).mappings()
-    return [DocumentVersionSummary.model_validate(row) for row in rows]
+    versions: list[DocumentVersionSummary] = []
+    for row in rows:
+        version = DocumentVersionSummary.model_validate(row)
+        origin = await _read_allowed_origin(uow, DocumentVersionRef(document_id, version.id))
+        versions.append(version.model_copy(update={"origin": origin}))
+    return versions

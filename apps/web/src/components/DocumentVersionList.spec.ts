@@ -26,3 +26,18 @@ it("read_action_targets_only_allowed_active_version", async () => {
   expect(wrapper.text()).toContain(version.content_sha256);
   expect(wrapper.text()).toContain("24");
 });
+
+it("shows_origin_only_when_returned_by_the_authorized_version_projection", async () => {
+  const origin = { kind: "synthetic_demo" as const, publisher: "Учебный демонстрационный корпус",
+    source_url: null, retrieved_at: null, published_on: null, source_sha256: "a".repeat(64),
+    transformation_revision: "v1" };
+  const wrapper = mount(DocumentVersionList, { props: {
+    versions: [{ ...version, origin }], canReadContent: true, activeVersionId: version.id,
+  } });
+  expect(wrapper.text()).toContain("Вымышленный учебный пример, не документ МЭИ.");
+  await wrapper.setProps({ versions: [version], canReadContent: false });
+  expect(wrapper.text()).toContain("Происхождение публикации не указано");
+  expect(wrapper.text()).not.toContain(origin.publisher);
+  expect(wrapper.find('[data-action="read-content"]').exists()).toBe(false);
+  wrapper.unmount();
+});

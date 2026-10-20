@@ -236,6 +236,13 @@ async function selectTurn(id: string) {
           :selected="chat.inspector.selected.value?.chunk_id ?? null"
           @select="chat.inspector.open"
         />
+        <p
+          v-if="chat.sources.value.length"
+          class="chat-hint"
+        >
+          Источники показывают документы, использованные при подготовке ответа.
+          Проверяйте существенные выводы по тексту.
+        </p>
         <SourceInspector
           :content="chat.inspector.content.value"
           :busy="chat.inspector.busy.value"

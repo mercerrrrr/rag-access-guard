@@ -31,7 +31,7 @@ it("admin_metadata_does_not_render_read_control_without_grant", async () => {
 });
 
 it("reader_opens_escaped_content_then_refresh_removes_revoked_registry", async () => {
-  vi.spyOn(documentsApi, "allowed").mockResolvedValue([{ id: document.id, title: document.title, active_version_id: version.id }]);
+  vi.spyOn(documentsApi, "allowed").mockResolvedValue([{ id: document.id, title: document.title, active_version_id: version.id, origin: null }]);
   vi.spyOn(documentsApi, "text").mockResolvedValue({ document_id: document.id, document_version_id: version.id, text: "<b>SECRET_54</b>" });
   const { wrapper } = await mountView(false);
   await wrapper.get('[data-action="select-document"]').trigger("click");

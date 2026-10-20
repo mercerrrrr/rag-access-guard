@@ -16,3 +16,17 @@ it("empty_registry_is_explicit", () => {
   expect(wrapper.text()).toContain("Документов нет");
   expect(wrapper.find("button").exists()).toBe(false);
 });
+
+it("shows_authorized_origin_and_removes_it_with_the_document", async () => {
+  const origin = { kind: "synthetic_demo" as const, publisher: "Учебный демонстрационный корпус",
+    source_url: null, retrieved_at: null, published_on: null, source_sha256: "a".repeat(64),
+    transformation_revision: "v1" };
+  const wrapper = mount(DocumentList, { props: {
+    documents: [{ ...document, origin }], selectedId: null, busy: false,
+  } });
+  expect(wrapper.text()).toContain("Вымышленный учебный пример, не документ МЭИ.");
+  await wrapper.setProps({ documents: [] });
+  expect(wrapper.find(".source-origin").exists()).toBe(false);
+  expect(wrapper.text()).not.toContain(origin.publisher);
+  wrapper.unmount();
+});

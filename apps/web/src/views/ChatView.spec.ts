@@ -58,7 +58,7 @@ it("unavailable_turn_keeps_only_user_question", async () => {
   let detail: ThreadDetail = { ...thread, revision: 1, turns: [reply.turn] };
   vi.spyOn(chatApi, "list").mockImplementation(() => Promise.resolve([detail]));
   vi.spyOn(chatApi, "detail").mockImplementation(() => Promise.resolve(detail));
-  vi.spyOn(chatApi, "source").mockResolvedValue({ ...source, text: "SOURCE_BODY_53" });
+  vi.spyOn(chatApi, "source").mockResolvedValue({ ...source, text: "SOURCE_BODY_53", policy_revision: 42 });
   const session = createSessionState(sessionApi());
   await session.refresh();
   const router = createRouter({ history: createMemoryHistory(), routes: [

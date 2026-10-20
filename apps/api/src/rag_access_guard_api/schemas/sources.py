@@ -19,6 +19,7 @@ class SourceContent(BaseModel):
     title: str
     text: str
     origin: DocumentOrigin | None = None
+    policy_revision: int
 
 
 class SourceNotFound(Exception):  # noqa: N818 -- public phase contract.

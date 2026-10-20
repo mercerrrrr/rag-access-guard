@@ -61,6 +61,7 @@ async def read_source(uow: ReadUoW, source_ref: SourceRef) -> SourceContent:
         title=row[0],
         text=row[1],
         origin=await read_version_origin(uow.connection, source_ref.document_version_id),
+        policy_revision=uow.revision,
     )
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from rag_access_guard import AccessDecision
 from rag_access_guard_api.persistence import Document, DocumentGrant, DocumentVersion, UserRole
 from rag_access_guard_api.schemas.access import AccessibleDocument, DocumentText
+from rag_access_guard_api.services.origin import read_version_origin
 from rag_access_guard_api.services.security import ReadUoW
 from rag_access_guard_api.services.text_documents import DocumentError
 
@@ -74,7 +75,12 @@ async def list_accessible_documents(uow: ReadUoW) -> tuple[AccessibleDocument, .
             .order_by(Document.title, Document.id)
         )
     ).mappings()
-    return tuple(AccessibleDocument.model_validate(row) for row in rows)
+    documents: list[AccessibleDocument] = []
+    for row in rows:
+        document = AccessibleDocument.model_validate(row)
+        origin = await read_version_origin(uow.connection, document.active_version_id)
+        documents.append(document.model_copy(update={"origin": origin}))
+    return tuple(documents)
 
 
 async def read_document_text(uow: ReadUoW, ref: DocumentVersionRef) -> DocumentText:

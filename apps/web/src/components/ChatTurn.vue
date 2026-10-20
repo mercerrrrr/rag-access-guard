@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import type { TurnView } from "@/api/types";
 import UnavailableAnswer from "@/components/UnavailableAnswer.vue";
+import AnswerBody from "@/components/AnswerBody.vue";
 const props = defineProps<{ readonly turn: TurnView;
   readonly selected?: boolean }>();
 defineEmits<{ select: [] }>();
@@ -28,6 +29,10 @@ const answer = computed(() => {
     <section aria-label="Ответ">
       <h3>Ответ</h3>
       <UnavailableAnswer v-if="turn.state === 'unavailable'" />
+      <AnswerBody
+        v-else-if="turn.state === 'available'"
+        :text="turn.answer"
+      />
       <slot
         v-else-if="turn.state === 'pending'"
         name="pending"

@@ -1,19 +1,20 @@
 import { z } from "zod";
+import { documentOriginSchema } from "./origin";
 
 export const docxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export const allowedDocumentSchema = z.object({
-  id: z.uuid(), title: z.string(), active_version_id: z.uuid(),
+  id: z.uuid(), title: z.string(), active_version_id: z.uuid(), origin: documentOriginSchema.nullable(),
 }).readonly();
 export const adminDocumentSchema = z.object({
   id: z.uuid(), title: z.string(), active_version_id: z.uuid().nullable(),
-  is_active: z.boolean(), created_at: z.string(),
+  is_active: z.boolean(), created_at: z.string(), origin: documentOriginSchema.nullable(),
 }).readonly();
 export const documentVersionSchema = z.object({
   id: z.uuid(), document_id: z.uuid(),
   status: z.enum(["stored", "chunked", "indexing", "ready", "failed"]),
   created_at: z.string(), content_sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  byte_size: z.number().int().nonnegative(),
+  byte_size: z.number().int().nonnegative(), origin: documentOriginSchema.nullable(),
 }).readonly();
 export const documentTextSchema = z.object({
   document_id: z.uuid(), document_version_id: z.uuid(), text: z.string(),

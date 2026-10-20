@@ -3,7 +3,7 @@ import type { ChatApi, SourceView, ThreadDetail, MessageResponse } from "@/api/t
 export const source: SourceView = {
   document_id: "00000000-0000-4000-8000-000000000001",
   document_version_id: "00000000-0000-4000-8000-000000000002",
-  chunk_id: "00000000-0000-4000-8000-000000000003", title: "Регламент",
+  chunk_id: "00000000-0000-4000-8000-000000000003", title: "Регламент", origin: null,
   url: "/api/documents/00000000-0000-4000-8000-000000000001/versions/00000000-0000-4000-8000-000000000002/content?chunk_id=00000000-0000-4000-8000-000000000003",
 };
 export const thread: ThreadDetail = {
@@ -20,6 +20,6 @@ export function chatApi(overrides: Partial<ChatApi> = {}): ChatApi {
     list: () => Promise.resolve([thread]), create: () => Promise.resolve(thread),
     detail: (id) => Promise.resolve({ ...thread, id }), send: () => Promise.resolve(reply),
     status: (_id, requestId) => Promise.resolve({ request_id: requestId, state: "absent", stage: null, elapsed_seconds: null }),
-    source: () => Promise.resolve({ ...source, text: "Защищённый текст" }), ...overrides,
+    source: () => Promise.resolve({ ...source, text: "Защищённый текст", policy_revision: 42 }), ...overrides,
   };
 }

@@ -20,7 +20,9 @@ def test_unavailable_projection_contains_only_safe_fields() -> None:
     }
 
 
-@pytest.mark.parametrize("field", ["raw_answer", "metadata", "source_refs", "debug"])
+@pytest.mark.parametrize(
+    "field", ["raw_answer", "metadata", "source_refs", "debug", "origin", "policy_revision"]
+)
 def test_unavailable_projection_rejects_hidden_protected_fields(field: str) -> None:
     with pytest.raises(ValidationError):
         _ = UnavailableTurn.model_validate(

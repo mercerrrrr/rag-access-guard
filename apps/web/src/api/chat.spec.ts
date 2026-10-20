@@ -48,7 +48,7 @@ it("generation_waits_past_normal_transport_timeout", async () => {
 const source = {
   document_id: "00000000-0000-4000-8000-000000000001",
   document_version_id: "00000000-0000-4000-8000-000000000002",
-  chunk_id: "00000000-0000-4000-8000-000000000003", title: "Регламент",
+  chunk_id: "00000000-0000-4000-8000-000000000003", title: "Регламент", origin: null,
   url: "/api/documents/00000000-0000-4000-8000-000000000001/versions/00000000-0000-4000-8000-000000000002/content?chunk_id=00000000-0000-4000-8000-000000000003",
 };
 

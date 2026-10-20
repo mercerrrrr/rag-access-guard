@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SourceView } from "@/api/types";
+import SourceOrigin from "@/components/SourceOrigin.vue";
 defineProps<{ readonly sources: readonly SourceView[]; readonly selected: string | null }>();
 defineEmits<{ select: [source: SourceView] }>();
 </script>
@@ -19,6 +20,7 @@ defineEmits<{ select: [source: SourceView] }>();
         <span class="source-list__number">[{{ index + 1 }}]</span>
         <span class="source-list__title">{{ source.title }}</span>
       </button>
+      <SourceOrigin :origin="source.origin" />
     </li>
   </ol>
 </template>

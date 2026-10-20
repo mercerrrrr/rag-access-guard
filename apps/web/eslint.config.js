@@ -17,6 +17,7 @@ export default tseslint.config(
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
+        extraFileExtensions: [".vue"],
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },

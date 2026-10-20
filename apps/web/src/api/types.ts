@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { documentOriginSchema } from "./origin";
 
 export const HELP_MESSAGE = "Я помогаю искать ответы в доступных документах. "
   + "Задайте конкретный вопрос или выберите пример. "
@@ -6,7 +7,7 @@ export const HELP_MESSAGE = "Я помогаю искать ответы в до
 
 export const sourceSchema = z.object({
   document_id: z.uuid(), document_version_id: z.uuid(), chunk_id: z.uuid(),
-  title: z.string(), url: z.string(),
+  title: z.string(), url: z.string(), origin: documentOriginSchema.nullable(),
 }).refine((source) => source.url ===
   `/api/documents/${source.document_id}/versions/${source.document_version_id}/content?chunk_id=${source.chunk_id}`,
 { message: "Source URL does not match its provenance" }).readonly();
@@ -14,7 +15,8 @@ export type SourceView = z.infer<typeof sourceSchema>;
 
 export const sourceContentSchema = z.object({
   document_id: z.uuid(), document_version_id: z.uuid(), chunk_id: z.uuid(),
-  title: z.string(), text: z.string(),
+  title: z.string(), text: z.string(), origin: documentOriginSchema.nullable(),
+  policy_revision: z.number().int().nonnegative(),
 }).readonly();
 export type SourceContent = z.infer<typeof sourceContentSchema>;
 

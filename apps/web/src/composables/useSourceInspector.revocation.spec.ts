@@ -19,7 +19,7 @@ it("a_late_source_read_cannot_reopen_an_unavailable_answer", async () => {
     answer: null, sources: [], message: "Ответ недоступен: права на один из источников изменились." }] };
   await state.loadThread(thread.id);
 
-  pending.resolve({ ...source, text: "SYNTHETIC_SECRET_53" });
+  pending.resolve({ ...source, text: "SYNTHETIC_SECRET_53", policy_revision: 42 });
   await read;
 
   expect(state.inspector.content.value).toBeNull();

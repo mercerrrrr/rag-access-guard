@@ -24,7 +24,7 @@ from rag_access_guard_api.services.sources import build_source_url
 
 
 async def baseline_source(uow: ReadUoW, ref: SourceRef) -> SourceContent:
-    """Require the complete canonical tuple and exact content despite omitted grant gate."""
+    """Return canonical bytes and the observed UoW revision, without rechecking source grants."""
     if len(await canonical_hashes(uow, (ref,))) != 1:
         raise SourceNotFound
     title, text = (
@@ -48,6 +48,7 @@ async def baseline_source(uow: ReadUoW, ref: SourceRef) -> SourceContent:
         chunk_id=ref.chunk_id,
         title=title,
         text=text,
+        policy_revision=uow.revision,
     )
 
 

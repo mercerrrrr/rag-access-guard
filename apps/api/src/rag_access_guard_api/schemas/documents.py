@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, StrictBool
 
+from rag_access_guard_api.schemas.origin import DocumentOrigin
+
 
 class DocumentSummary(BaseModel):
     """Logical document metadata."""
@@ -16,6 +18,7 @@ class DocumentSummary(BaseModel):
     is_active: bool
     active_version_id: UUID | None
     created_at: datetime
+    origin: DocumentOrigin | None = None
 
 
 class DocumentVersionSummary(BaseModel):
@@ -28,6 +31,7 @@ class DocumentVersionSummary(BaseModel):
     created_at: datetime
     content_sha256: str
     byte_size: int
+    origin: DocumentOrigin | None = None
 
 
 class DocumentList(BaseModel):

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SourceContent } from "@/api/types";
+import SourceOrigin from "@/components/SourceOrigin.vue";
 defineProps<{ readonly content: SourceContent | null; readonly busy: boolean; readonly message: string }>();
 defineEmits<{ close: [] }>();
 </script>
@@ -38,6 +39,14 @@ defineEmits<{ close: [] }>();
       <p class="chat-hint">
         ✓ Разрешён при открытии
       </p>
+      <p class="chat-hint">
+        Проверено по ревизии {{ content.policy_revision }}
+      </p>
+      <SourceOrigin :origin="content.origin" />
+      <details class="source-inspector__details">
+        <summary>Сведения об источнике</summary>
+        <p>Версия: {{ content.document_version_id }}</p>
+      </details>
       <p class="source-inspector__text">
         {{ content.text }}
       </p>

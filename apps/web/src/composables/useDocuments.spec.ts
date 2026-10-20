@@ -60,7 +60,7 @@ it("late_list_cannot_restore_previous_user_documents", async () => {
   const { session, state } = await setup({ allowed: () => late.promise });
   const pending = state.refresh();
   session.clearProtectedState();
-  late.resolve([{ id: document.id, title: document.title, active_version_id: version.id }]);
+  late.resolve([{ id: document.id, title: document.title, active_version_id: version.id, origin: null }]);
   await pending;
   expect(state.items.value).toEqual([]);
   expect(state.content.value).toBeNull();

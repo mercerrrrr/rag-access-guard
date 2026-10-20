@@ -5,7 +5,7 @@ import { documentsApi } from "@/api/documents";
 const id = "00000000-0000-4000-8000-000000000054";
 const versionId = "00000000-0000-4000-8000-000000000055";
 const document = { id, title: "Регламент", active_version_id: versionId,
-  is_active: true, created_at: "2026-10-01T00:00:00Z" };
+  is_active: true, created_at: "2026-10-01T00:00:00Z", origin: null };
 const signal = () => new AbortController().signal;
 beforeEach(() => {
   vi.stubGlobal("window", { location: { origin: "http://localhost" } });
@@ -32,7 +32,7 @@ it("uploads_multipart_with_cookie_csrf_and_browser_boundary", async () => {
 });
 
 it("parses_allowed_registry_without_administrative_privilege", async () => {
-  const allowed = { id, title: document.title, active_version_id: versionId };
+  const allowed = { id, title: document.title, active_version_id: versionId, origin: null };
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ items: [allowed] })));
   await expect(documentsApi.allowed(signal())).resolves.toEqual([allowed]);
 });
@@ -58,6 +58,6 @@ it.each([413, 415, 422, 503])("failed_upload_%s_is_not_a_ready_document", async 
 it("rejects_versions_belonging_to_another_document", async () => {
   vi.stubGlobal("fetch", () => Promise.resolve(Response.json({ items: [{ id: versionId,
     document_id: versionId, status: "ready", created_at: "2026-10-01T00:00:00Z",
-    byte_size: 1, content_sha256: "0".repeat(64) }] })));
+    byte_size: 1, content_sha256: "0".repeat(64), origin: null }] })));
   await expect(documentsApi.versions(id, signal())).rejects.toMatchObject({ status: 0 });
 });

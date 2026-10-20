@@ -1,5 +1,8 @@
 from uuid import uuid4
 
+from sqlalchemy import select
+
+from rag_access_guard_api.persistence import PolicyState
 from rag_access_guard_api.schemas.chat import MessageRequest
 from tests.support.chat_generation import ChatCase
 
@@ -10,6 +13,8 @@ def test_source_url_is_denied_after_grant_revocation(chat_case: ChatCase) -> Non
     )
     assert result.turn.state == "available"
     source = result.turn.sources[0]
+    with chat_case.database.connect() as connection:
+        revision = connection.execute(select(PolicyState.revision)).scalar_one()
     response = chat_case.client.get(source.url)
     assert response.status_code == 200, response.text
     assert response.json() == {
@@ -19,6 +24,7 @@ def test_source_url_is_denied_after_grant_revocation(chat_case: ChatCase) -> Non
         "title": "Synthetic",
         "text": "PROTECTED_SYNTHETIC",
         "origin": None,
+        "policy_revision": revision,
     }
     assert response.headers["cache-control"] == "private, no-store"
     assert response.headers["vary"] == "Cookie"

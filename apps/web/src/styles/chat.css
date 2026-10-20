@@ -36,4 +36,14 @@
 .source-inspector__heading { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
 .source-inspector__heading h3 { font-size: var(--font-size-body); flex: 1; margin: 0; }
 .source-inspector .chat-hint { font-size: var(--font-size-label); }
+.source-list .source-origin { padding: 0 var(--space-2) var(--space-4); }
+.source-inspector__details { margin-block: var(--space-3); font-size: var(--font-size-label); }
+.source-inspector__details summary { min-block-size: var(--size-control); padding-block: var(--space-3); cursor: pointer; }
+.source-inspector__details summary:focus-visible { outline: var(--size-focus-ring) solid var(--color-accent); outline-offset: var(--size-focus-ring); }
+.answer-body { max-inline-size: var(--measure-reading); min-inline-size: 0; line-height: var(--line-height-body); overflow-wrap: anywhere; }
+.answer-body ul, .answer-body ol { margin-block: 0 var(--space-4); padding-inline-start: var(--space-5); }
+.answer-body li + li { margin-block-start: var(--space-2); }
+.answer-body li p { margin-block-end: var(--space-2); }
+.answer-body pre { max-inline-size: 100%; overflow-x: auto; padding: var(--space-3); background: var(--color-surface-subtle); border-radius: var(--radius-control); white-space: pre; }
+.answer-body code { font-family: var(--font-family-mono); font-size: inherit; }
 @media (max-width: 47.99rem) { .chat-workspace { padding: var(--space-4); } .chat-toolbar select { flex-basis: 70%; } }

@@ -16,6 +16,7 @@ from rag_access_guard_api.adapters import embeddings, llm
 from rag_access_guard_api.main import create_app
 from rag_access_guard_api.server import EVENT_LOOP_IMPORT
 from tests.e2e.guidance import seed_guidance
+from tests.e2e.presentation import PRESENTATION_ANSWER, PRESENTATION_QUESTION
 from tests.e2e.progress_control import ProgressControl, mount_progress_control
 from tests.e2e.seed import disposable_database, seed_users
 from tests.integration.embedding_fixtures import DeterministicEmbedder
@@ -29,6 +30,8 @@ class ContextAnswer:
         if user_input == "Привет!":
             message = "Help must not call the model"
             raise AssertionError(message)
+        if user_input == PRESENTATION_QUESTION and "SYNTHETIC_REVOKE_57" in system_supplied_context:
+            return PRESENTATION_ANSWER
         if "SYNTHETIC_REVOKE_57" in system_supplied_context:
             return "SYNTHETIC_REVOKE_57"
         return "SYNTHETIC_OTHER_57"

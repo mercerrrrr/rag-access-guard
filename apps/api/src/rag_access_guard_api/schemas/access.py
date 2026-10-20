@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints, model_validator
 
+from rag_access_guard_api.schemas.origin import DocumentOrigin
+
 
 class AccessibleDocument(BaseModel):
     """Metadata of a document the current session can read."""
@@ -13,6 +15,7 @@ class AccessibleDocument(BaseModel):
     id: UUID
     title: str
     active_version_id: UUID
+    origin: DocumentOrigin | None = None
 
 
 class AccessibleDocuments(BaseModel):
