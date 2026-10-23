@@ -40,6 +40,7 @@ type ProfileId = Literal[
     "qwen3-instruct-compact-demo-v1",
     "qwen25-instruct-small-demo-v1",
     "qwen25-extractive-small-demo-v1",
+    "qwen25-extractive-small-demo-v2",
     "qwen35-extractive-demo-v1",
     "qwen35-extractive-text-demo-v1",
     "qwen35-extractive-cpu-demo-v1",
@@ -123,6 +124,12 @@ class ModelProfile:
             user_input=user_input, system_supplied_context=system_supplied_context
         )
         match self.profile_id:
+            case "qwen25-extractive-small-demo-v2":
+                return extractive_messages(
+                    user_input=user_input,
+                    system_supplied_context=system_supplied_context,
+                    sufficient=True,
+                )
             case (
                 "qwen35-extractive-demo-v1"
                 | "qwen35-extractive-text-demo-v1"
@@ -165,6 +172,7 @@ class ModelProfile:
                 "qwen3-instruct-demo-v1"
                 | "qwen3-instruct-compact-demo-v1"
                 | "qwen25-extractive-small-demo-v1"
+                | "qwen25-extractive-small-demo-v2"
             ):
                 messages = self.messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
@@ -191,7 +199,11 @@ class ModelProfile:
     def options(self) -> GenerationOptions | InstructOptions | SmallExtractiveOptions:
         """Return a fresh payload so consumers cannot mutate the pinned bundle."""
         match self.profile_id:
-            case "qwen25-extractive-small-demo-v1" | "qwen35-extractive-cpu-demo-v1":
+            case (
+                "qwen25-extractive-small-demo-v1"
+                | "qwen25-extractive-small-demo-v2"
+                | "qwen35-extractive-cpu-demo-v1"
+            ):
                 return {
                     "num_ctx": self.manifest.context_window,
                     "num_predict": self.manifest.max_output_tokens,
@@ -262,6 +274,14 @@ SMALL_EXTRACTIVE_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-qwen25-excerpts-ru-v1",
 )
+SUFFICIENT_EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen25-extractive-small-demo-v2",
+    SmallExtractiveManifest(prompt_revision="rag-excerpts-ru-v2"),
+    SMALL_TOKENIZER_SHA256,
+    SMALL_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    "ollama-qwen25-excerpts-ru-v2",
+)
 EXTRACTIVE_PROFILE: Final = ModelProfile(
     "qwen35-extractive-demo-v1",
     ExtractiveManifest(),
@@ -301,6 +321,8 @@ def get_model_profile(profile_id: str) -> ModelProfile:
             profile = SMALL_DEMO_PROFILE
         case "qwen25-extractive-small-demo-v1":
             profile = SMALL_EXTRACTIVE_PROFILE
+        case "qwen25-extractive-small-demo-v2":
+            profile = SUFFICIENT_EXTRACTIVE_PROFILE
         case "qwen35-extractive-demo-v1":
             profile = EXTRACTIVE_PROFILE
         case "qwen35-extractive-text-demo-v1":
@@ -331,6 +353,8 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             profile = DEMO_PROFILE
         case SmallInstructManifest():
             profile = SMALL_DEMO_PROFILE
+        case SmallExtractiveManifest(prompt_revision="rag-excerpts-ru-v2"):
+            profile = SUFFICIENT_EXTRACTIVE_PROFILE
         case SmallExtractiveManifest():
             profile = SMALL_EXTRACTIVE_PROFILE
         case ExtractiveManifest():

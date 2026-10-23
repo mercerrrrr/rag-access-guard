@@ -1,9 +1,9 @@
 """Strict parsing of Guard's existing canonical context at the model boundary."""
 
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, ClassVar, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, TypeAdapter, model_validator
 
 from rag_access_guard_api.schemas.origin_labels import OriginLabel
 
@@ -59,6 +59,19 @@ class EvidenceSelection(EvidenceValue):
     """Only ordinal selection is model output; no model-written answer is accepted."""
 
     paragraph_ids: tuple[Annotated[int, Field(ge=0)], ...] = Field(max_length=3)
+
+
+class SufficientEvidenceSelection(EvidenceSelection):
+    """Require a consistent explicit decision before rendering any quotation."""
+
+    decision: Literal["complete", "insufficient"]
+
+    @model_validator(mode="after")
+    def consistent_decision(self) -> Self:
+        """Complete answers select evidence; insufficient answers cannot select it."""
+        if bool(self.paragraph_ids) != (self.decision == "complete"):
+            raise ValueError
+        return self
 
 
 type CanonicalEvidence = SingleTurnEvidence | HistoricalEvidence

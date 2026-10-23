@@ -143,7 +143,9 @@ class OllamaAdapter:
         match self.manifest:
             case SmallExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
-                payload["format"] = selection_schema(entries)
+                payload["format"] = selection_schema(
+                    entries, sufficient=self.profile.profile_id == "qwen25-extractive-small-demo-v2"
+                )
             case ExtractiveManifest() | TextExtractiveManifest() | CpuExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
                 payload.update(think=False, format=selection_schema(entries))
@@ -192,7 +194,14 @@ class OllamaAdapter:
                 )
                 answer = decode_answer(raw)
                 if entries is not None:
-                    answer = require_plain_answer(render_selection(answer, entries, self.counter))
+                    answer = require_plain_answer(
+                        render_selection(
+                            answer,
+                            entries,
+                            self.counter,
+                            sufficient=self.profile.profile_id == "qwen25-extractive-small-demo-v2",
+                        )
+                    )
                 if self._supervisor is not None and claim is not None:
                     await run_sync(self._supervisor.complete_inference, claim)
                 return answer

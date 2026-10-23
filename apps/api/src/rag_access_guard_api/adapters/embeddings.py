@@ -161,6 +161,7 @@ def get_embedding_adapter() -> EmbeddingAdapter:
         )
     extractive = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") in {
         "qwen25-extractive-small-demo-v1",
+        "qwen25-extractive-small-demo-v2",
         "qwen35-extractive-demo-v1",
         "qwen35-extractive-text-demo-v1",
         "qwen35-extractive-cpu-demo-v1",
