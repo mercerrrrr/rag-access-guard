@@ -19,12 +19,17 @@ from rag_access_guard_api.schemas.search import SearchResponse
 from rag_access_guard_api.services.passwords import hash_password
 from tests.integration.search_fixtures import configure_search
 
+pytestmark = pytest.mark.parametrize(
+    "query_cache_profile", ["qwen35-extractive-cpu-demo-v1", "qwen25-extractive-small-demo-v2"]
+)
+
 
 @pytest.fixture
 def cached_search(
     registered_document: DocumentSummary,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    query_cache_profile: str,
 ) -> list[str]:
     assert registered_document.active_version_id is not None
     configure_search(tmp_path / "calibration.json", monkeypatch)
@@ -37,7 +42,7 @@ def cached_search(
         calls.extend(texts)
         return tuple((1.0, *(0.0 for _ in range(383))) for _ in texts)
 
-    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", "qwen35-extractive-cpu-demo-v1")
+    monkeypatch.setenv("RAG_ACCESS_GUARD_MODEL_PROFILE", query_cache_profile)
     monkeypatch.setattr(E5EmbeddingAdapter, "_encode", encode)
     monkeypatch.setattr(IsolatedE5EmbeddingAdapter, "_encode", encode)
     monkeypatch.setattr(embeddings, "get_embedding_adapter", get_embedding_adapter)

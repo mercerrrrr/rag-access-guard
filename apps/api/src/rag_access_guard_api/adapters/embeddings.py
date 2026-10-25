@@ -149,11 +149,13 @@ class IsolatedE5EmbeddingAdapter(E5EmbeddingAdapter):
 def get_embedding_adapter() -> EmbeddingAdapter:
     """Return the locally provisioned embedding model."""
     path = Path(os.environ.get("RAG_ACCESS_GUARD_MODEL_PATH", f".cache/e5/{MODEL_REVISION}"))
-    cache_queries = (
-        os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE") == "qwen35-extractive-cpu-demo-v1"
-    )
+    profile = os.environ.get("RAG_ACCESS_GUARD_MODEL_PROFILE")
+    resident_allowed = profile == "qwen35-extractive-cpu-demo-v1"
+    cache_queries = resident_allowed or profile == "qwen25-extractive-small-demo-v2"
     execution = os.environ.get("RAG_ACCESS_GUARD_E5_EXECUTION", "isolated")
-    if execution not in {"isolated", "resident"} or (execution == "resident" and not cache_queries):
+    if execution not in {"isolated", "resident"} or (
+        execution == "resident" and not resident_allowed
+    ):
         raise EmbeddingError
     if execution == "resident":
         return E5EmbeddingAdapter(
