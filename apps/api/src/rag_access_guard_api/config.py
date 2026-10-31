@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     loopback_development: bool = False
     bind_host: str = "127.0.0.1"
     retrieval_config_path: Path | None = None
+    relevance_config_path: Path | None = None
     suggestions_path: Path | None = None
     llm_adapter: Literal["disabled", "fake", "ollama"] = "disabled"
     model_profile: ProfileId = "qwen3-thinking-legacy-v1"
@@ -47,6 +48,18 @@ class Settings(BaseSettings):
     ollama_supervisor_config_path: Path | None = None
     generation_timeout_seconds: int = Field(default=GENERATION_TIMEOUT_SECONDS, gt=0, le=60)
     pending_lease_seconds: int = Field(default=PENDING_LEASE_SECONDS, gt=0)
+
+    @model_validator(mode="after")
+    def validate_relevance_profile(self) -> Self:
+        """Enable the measured relevance bundle only through explicit local configuration."""
+        enabled = self.relevance_config_path is not None
+        mask_bundle = self.model_profile == "qwen25-extractive-small-demo-v3"
+        if enabled != mask_bundle or (
+            enabled and (self.llm_adapter != "ollama" or not self.loopback_development)
+        ):
+            message = "Relevance triage requires the local small-v3 Ollama bundle"
+            raise ValueError(message)
+        return self
 
     @model_validator(mode="after")
     def validate_e5_execution(self) -> Self:

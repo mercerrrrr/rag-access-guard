@@ -45,4 +45,6 @@ class SmallExtractiveManifest(BaseModel):
     ] = "66b9ea09bd5b7099cbb4fc820f31b575c0366fa439b08245566692c6784e281e"
     context_window: Literal[4096] = 4096
     max_output_tokens: Literal[512] = 512
-    prompt_revision: Literal["rag-excerpts-ru-v1", "rag-excerpts-ru-v2"] = "rag-excerpts-ru-v1"
+    prompt_revision: Literal["rag-excerpts-ru-v1", "rag-excerpts-ru-v2", "rag-excerpts-ru-v3"] = (
+        "rag-excerpts-ru-v1"
+    )

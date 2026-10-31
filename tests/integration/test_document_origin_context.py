@@ -21,7 +21,7 @@ from rag_access_guard_api.adapters.model_tokens import ModelTokenCounter
 from rag_access_guard_api.routes import chat as routes
 from rag_access_guard_api.services import chat
 from rag_access_guard_api.services.chat_state import GenerationAttempt
-from rag_access_guard_api.services.model_profiles import InstructManifest
+from rag_access_guard_api.services.model_profiles import InstructManifest, ProfileId
 from rag_access_guard_api.services.origin_context import OFFICIAL_LABEL, SYNTHETIC_LABEL
 from rag_access_guard_api.services.retrieval import retrieve
 from rag_access_guard_api.services.security import ReadUoW
@@ -179,13 +179,17 @@ def test_origin_binding_is_checked_before_model_invocation(
             attempt: GenerationAttempt,
             user_input: str,
             counter: TokenCounter,
+            *,
+            profile_id: ProfileId | None = None,
         ) -> chat.Generated | chat.Neutral:
             changed = (
                 replace(attempt, origin_binding="0" * 64)
                 if fault == "digest"
                 else replace(attempt, model_context=attempt.prepared.model_context)
             )
-            return await super()._infer(session_token, changed, user_input, counter)
+            return await super()._infer(
+                session_token, changed, user_input, counter, profile_id=profile_id
+            )
 
     monkeypatch.setattr(routes, "ChatService", TamperingService)
     # When

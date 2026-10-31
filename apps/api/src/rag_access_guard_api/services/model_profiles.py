@@ -10,6 +10,7 @@ from rag_access_guard_api.adapters.model_messages import (
     build_messages,
     render_request,
 )
+from rag_access_guard_api.services.evidence_mask import mask_messages
 from rag_access_guard_api.services.evidence_selection import (
     extractive_messages,
     render_extractive_request,
@@ -41,6 +42,7 @@ type ProfileId = Literal[
     "qwen25-instruct-small-demo-v1",
     "qwen25-extractive-small-demo-v1",
     "qwen25-extractive-small-demo-v2",
+    "qwen25-extractive-small-demo-v3",
     "qwen35-extractive-demo-v1",
     "qwen35-extractive-text-demo-v1",
     "qwen35-extractive-cpu-demo-v1",
@@ -124,6 +126,10 @@ class ModelProfile:
             user_input=user_input, system_supplied_context=system_supplied_context
         )
         match self.profile_id:
+            case "qwen25-extractive-small-demo-v3":
+                return mask_messages(
+                    user_input=user_input, system_supplied_context=system_supplied_context
+                )
             case "qwen25-extractive-small-demo-v2":
                 return extractive_messages(
                     user_input=user_input,
@@ -173,6 +179,7 @@ class ModelProfile:
                 | "qwen3-instruct-compact-demo-v1"
                 | "qwen25-extractive-small-demo-v1"
                 | "qwen25-extractive-small-demo-v2"
+                | "qwen25-extractive-small-demo-v3"
             ):
                 messages = self.messages(
                     user_input=user_input, system_supplied_context=system_supplied_context
@@ -202,6 +209,7 @@ class ModelProfile:
             case (
                 "qwen25-extractive-small-demo-v1"
                 | "qwen25-extractive-small-demo-v2"
+                | "qwen25-extractive-small-demo-v3"
                 | "qwen35-extractive-cpu-demo-v1"
             ):
                 return {
@@ -282,6 +290,14 @@ SUFFICIENT_EXTRACTIVE_PROFILE: Final = ModelProfile(
     OLLAMA_VERSION,
     "ollama-qwen25-excerpts-ru-v2",
 )
+MASK_EXTRACTIVE_PROFILE: Final = ModelProfile(
+    "qwen25-extractive-small-demo-v3",
+    SmallExtractiveManifest(prompt_revision="rag-excerpts-ru-v3"),
+    SMALL_TOKENIZER_SHA256,
+    SMALL_TEMPLATE_SHA256,
+    OLLAMA_VERSION,
+    "ollama-qwen25-excerpts-ru-v3",
+)
 EXTRACTIVE_PROFILE: Final = ModelProfile(
     "qwen35-extractive-demo-v1",
     ExtractiveManifest(),
@@ -308,31 +324,40 @@ CPU_EXTRACTIVE_PROFILE: Final = ModelProfile(
 )
 
 
+PROFILES: Final = (
+    LEGACY_PROFILE,
+    DEMO_PROFILE,
+    COMPACT_DEMO_PROFILE,
+    SMALL_DEMO_PROFILE,
+    SMALL_EXTRACTIVE_PROFILE,
+    SUFFICIENT_EXTRACTIVE_PROFILE,
+    MASK_EXTRACTIVE_PROFILE,
+    EXTRACTIVE_PROFILE,
+    TEXT_EXTRACTIVE_PROFILE,
+    CPU_EXTRACTIVE_PROFILE,
+)
+
+
 def get_model_profile(profile_id: str) -> ModelProfile:
-    """Reject anything outside the pinned generation bundles."""
-    match profile_id:
-        case "qwen3-thinking-legacy-v1":
-            profile = LEGACY_PROFILE
-        case "qwen3-instruct-demo-v1":
-            profile = DEMO_PROFILE
-        case "qwen3-instruct-compact-demo-v1":
-            profile = COMPACT_DEMO_PROFILE
-        case "qwen25-instruct-small-demo-v1":
-            profile = SMALL_DEMO_PROFILE
-        case "qwen25-extractive-small-demo-v1":
-            profile = SMALL_EXTRACTIVE_PROFILE
-        case "qwen25-extractive-small-demo-v2":
-            profile = SUFFICIENT_EXTRACTIVE_PROFILE
-        case "qwen35-extractive-demo-v1":
-            profile = EXTRACTIVE_PROFILE
-        case "qwen35-extractive-text-demo-v1":
-            profile = TEXT_EXTRACTIVE_PROFILE
-        case "qwen35-extractive-cpu-demo-v1":
-            profile = CPU_EXTRACTIVE_PROFILE
+    """Reject anything outside the immutable generation registry."""
+    for profile in PROFILES:
+        if profile.profile_id == profile_id:
+            return profile
+    message = "Unknown model profile"
+    raise ValueError(message)
+
+
+def _small_extractive_profile(manifest: SmallExtractiveManifest) -> ModelProfile:
+    """Keep the small-model prompt variants exhaustive without changing old identities."""
+    match manifest.prompt_revision:
+        case "rag-excerpts-ru-v1":
+            return SMALL_EXTRACTIVE_PROFILE
+        case "rag-excerpts-ru-v2":
+            return SUFFICIENT_EXTRACTIVE_PROFILE
+        case "rag-excerpts-ru-v3":
+            return MASK_EXTRACTIVE_PROFILE
         case _:
-            message = "Unknown model profile"
-            raise ValueError(message)
-    return profile
+            assert_never(manifest.prompt_revision)
 
 
 def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
@@ -353,10 +378,8 @@ def profile_for_manifest(manifest: GenerationManifest) -> ModelProfile:
             profile = DEMO_PROFILE
         case SmallInstructManifest():
             profile = SMALL_DEMO_PROFILE
-        case SmallExtractiveManifest(prompt_revision="rag-excerpts-ru-v2"):
-            profile = SUFFICIENT_EXTRACTIVE_PROFILE
         case SmallExtractiveManifest():
-            profile = SMALL_EXTRACTIVE_PROFILE
+            profile = _small_extractive_profile(manifest)
         case ExtractiveManifest():
             profile = EXTRACTIVE_PROFILE
         case TextExtractiveManifest():

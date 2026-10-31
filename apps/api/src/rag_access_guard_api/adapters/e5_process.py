@@ -20,6 +20,7 @@ from rag_access_guard_api.adapters.ollama_supervisor import ProcessIdentity
 from rag_access_guard_api.schemas.embedding_vectors import EmbeddingError, validate_vectors
 from rag_access_guard_api.schemas.embedding_work import EmbeddingWorkRequest, EmbeddingWorkResponse
 from rag_access_guard_api.schemas.generation import InferenceUnavailableError
+from rag_access_guard_api.schemas.relevance_work import RelevanceWorkRequest, RelevanceWorkResponse
 
 MAX_REQUEST_BYTES: Final = 32 * 1024**2
 MAX_RESPONSE_BYTES: Final = 1024**2
@@ -184,3 +185,48 @@ def encode_isolated(
     except ValidationError:
         raise EmbeddingError from None
     return tuple(result)
+
+
+def _exchange_relevance(
+    process: EmbeddingChild, request: RelevanceWorkRequest, expired: Event
+) -> tuple[float, ...]:
+    _ = process.stdin.write(request.model_dump_json().encode())
+    process.stdin.close()
+    raw = TypeAdapter(bytes).validate_python(
+        process.stdout.read(MAX_RESPONSE_BYTES + 1), strict=True
+    )
+    if expired.is_set() or len(raw) > MAX_RESPONSE_BYTES or process.wait(timeout=5) != 0:
+        raise EmbeddingError
+    response = RelevanceWorkResponse.model_validate_json(raw)
+    if response.nonce != request.nonce or len(response.scores) != len(request.texts):
+        raise EmbeddingError
+    return response.scores
+
+
+def score_relevance_isolated(
+    path: Path, question: str, texts: tuple[str, ...], runtime: InferenceRuntime
+) -> tuple[float, ...]:
+    """Reuse creation-time containment and prove exit before releasing physical admission."""
+    request = RelevanceWorkRequest(
+        nonce=uuid4(), config_path=path.resolve(), question=question, texts=texts
+    )
+    if runtime.closed or len(request.model_dump_json().encode()) > MAX_REQUEST_BYTES:
+        raise EmbeddingError
+    job = WindowsJob(f"Local\\rag-relevance-{uuid4()}", create=True, kill_on_close=True)
+    process: EmbeddingChild | None = None
+    try:
+        process = _start_child(job)
+        with _watch_child(job, process, runtime) as expired:
+            scores = _exchange_relevance(process, request, expired)
+    except (OSError, psutil.Error, ValueError, ValidationError, subprocess.TimeoutExpired):
+        raise EmbeddingError from None
+    else:
+        return scores
+    finally:
+        if process is None:
+            job.close()
+        else:
+            try:
+                confirm_worker_exit(job, process)
+            finally:
+                _close_pipes(process)

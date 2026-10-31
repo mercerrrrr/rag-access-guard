@@ -31,6 +31,7 @@ from rag_access_guard_api.adapters.tokenizer import (
 from rag_access_guard_api.config import INFERENCE_RECOVERY_SECONDS
 from rag_access_guard_api.schemas.generation import GenerationUnavailable as LLMUnavailableError
 from rag_access_guard_api.services.evidence_context import evidence_passages
+from rag_access_guard_api.services.evidence_mask import mask_schema, render_mask
 from rag_access_guard_api.services.evidence_selection import render_selection, selection_schema
 from rag_access_guard_api.services.extractive_manifest import (
     CpuExtractiveManifest,
@@ -143,8 +144,13 @@ class OllamaAdapter:
         match self.manifest:
             case SmallExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
-                payload["format"] = selection_schema(
-                    entries, sufficient=self.profile.profile_id == "qwen25-extractive-small-demo-v2"
+                payload["format"] = (
+                    mask_schema(entries)
+                    if self.profile.profile_id == "qwen25-extractive-small-demo-v3"
+                    else selection_schema(
+                        entries,
+                        sufficient=self.profile.profile_id == "qwen25-extractive-small-demo-v2",
+                    )
                 )
             case ExtractiveManifest() | TextExtractiveManifest() | CpuExtractiveManifest():
                 entries = evidence_passages(system_supplied_context)
@@ -195,7 +201,9 @@ class OllamaAdapter:
                 answer = decode_answer(raw)
                 if entries is not None:
                     answer = require_plain_answer(
-                        render_selection(
+                        render_mask(answer, entries, self.counter)
+                        if self.profile.profile_id == "qwen25-extractive-small-demo-v3"
+                        else render_selection(
                             answer,
                             entries,
                             self.counter,

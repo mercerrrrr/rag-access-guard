@@ -22,6 +22,7 @@ from rag_access_guard_api.config import (
     GENERATION_MAX_ATTEMPTS,
     GENERATION_TIMEOUT_SECONDS,
     PENDING_LEASE_SECONDS,
+    Settings,
 )
 from rag_access_guard_api.schemas.chat import MessageRequest, MessageResponse
 from rag_access_guard_api.schemas.chat_progress import ProgressStage
@@ -35,6 +36,13 @@ from rag_access_guard_api.services.chat_release import Generated, Neutral, Stale
 from rag_access_guard_api.services.chat_repository import get_owned_thread, load_prior_turns
 from rag_access_guard_api.services.chat_state import ChatConflict, GenerationAttempt, Reservation
 from rag_access_guard_api.services.errors import ForbiddenError
+from rag_access_guard_api.services.generation_plan import (
+    PlannedGeneration,
+    PlanningDenied,
+    PlanningInput,
+    plan_generation,
+)
+from rag_access_guard_api.services.model_profiles import ProfileId
 from rag_access_guard_api.services.origin import InvalidOriginError
 from rag_access_guard_api.services.origin_context import (
     HostPrepared,
@@ -177,24 +185,11 @@ class ChatService:
                     case None:
                         return Neutral(reservation, "no_context")
                     case HostPrepared():
-                        context = prepared.prepared
-                        if not context.source_refs or not matches_history(context, history):
-                            return Neutral(
-                                reservation,
-                                "policy_changed" if context.source_refs else "no_context",
-                            )
-                        attempt = GenerationAttempt(
-                            reservation.principal_id,
-                            reservation.session_id,
-                            reservation.thread_id,
-                            reservation.request_id,
-                            reservation.thread_revision,
-                            context,
-                            prepared.origin_binding,
-                            prepared.model_context,
-                            prepared.context_budget,
+                        return await self._generate_prepared(
+                            session_token,
+                            PlanningInput(reservation, chunks, history, prepared, user_input),
+                            counter,
                         )
-                        return await self._infer(session_token, attempt, user_input, counter)
                     case _:
                         assert_never(prepared)
         except (
@@ -208,12 +203,61 @@ class ChatService:
         ):
             return Neutral(reservation, "generation_unavailable")
 
+    async def _generate_prepared(
+        self, session_token: str, request: PlanningInput, counter: TokenCounter
+    ) -> Generated | Neutral:
+        """Plan unlocked model work while retaining the exact checked provenance binding."""
+        reservation, user_input = request.reservation, request.user_input
+        history, prepared = request.history, request.prepared
+        context = prepared.prepared
+        if not context.source_refs or not matches_history(context, history):
+            return Neutral(
+                reservation,
+                "policy_changed" if context.source_refs else "no_context",
+            )
+        profile_id: ProfileId | None = None
+        relevance_path = Settings().relevance_config_path
+        if relevance_path is not None:
+            planned = await plan_generation(
+                self.policy,
+                session_token,
+                request,
+                config_path=relevance_path,
+            )
+            match planned:
+                case PlanningDenied():
+                    return Neutral(reservation, planned.reason)
+                case PlannedGeneration():
+                    prepared, counter = planned.prepared, planned.counter
+                    context = prepared.prepared
+                    profile_id = planned.profile_id
+                case _:
+                    assert_never(planned)
+        attempt = GenerationAttempt(
+            reservation.principal_id,
+            reservation.session_id,
+            reservation.thread_id,
+            reservation.request_id,
+            reservation.thread_revision,
+            context,
+            prepared.origin_binding,
+            prepared.model_context,
+            prepared.context_budget,
+        )
+        if profile_id is not None:
+            return await self._infer(
+                session_token, attempt, user_input, counter, profile_id=profile_id
+            )
+        return await self._infer(session_token, attempt, user_input, counter)
+
     async def _infer(
         self,
         session_token: str,
         attempt: GenerationAttempt,
         user_input: str,
         counter: TokenCounter,
+        *,
+        profile_id: ProfileId | None = None,
     ) -> Generated | Neutral:
         reservation = Reservation(
             attempt.principal_id,
@@ -225,7 +269,8 @@ class ChatService:
         if not await self._active(session_token, attempt, counter=counter):
             return Neutral(reservation, "interrupted")
         self._set_stage(reservation, "generation")
-        body = await llm.get_llm_adapter().generate(
+        adapter = llm.get_llm_adapter() if profile_id is None else llm.get_llm_adapter(profile_id)
+        body = await adapter.generate(
             user_input=user_input,
             system_supplied_context=attempt.model_context or attempt.prepared.model_context,
         )

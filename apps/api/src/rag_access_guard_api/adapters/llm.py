@@ -21,7 +21,11 @@ from rag_access_guard_api.adapters.ollama_identity import verify_model
 from rag_access_guard_api.adapters.ollama_supervisor import OllamaSupervisor, load_supervisor_config
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.generation import GenerationUnavailable
-from rag_access_guard_api.services.model_profiles import get_model_profile
+from rag_access_guard_api.schemas.relevance_config import (
+    load_relevance_config,
+    verify_relevance_artifacts,
+)
+from rag_access_guard_api.services.model_profiles import ProfileId, get_model_profile
 
 LLMUnavailableError = GenerationUnavailable
 
@@ -59,9 +63,11 @@ class FakeLLMAdapter:
         return "SYNTHETIC_ANSWER"
 
 
-def get_llm_adapter() -> LLMAdapter:
+def get_llm_adapter(profile_id: ProfileId | None = None) -> LLMAdapter:
     """Require explicit server configuration; clients cannot choose a model mode."""
     settings = Settings()
+    if profile_id is not None and settings.relevance_config_path is None:
+        raise LLMUnavailableError
     match settings.llm_adapter:
         case "fake":
             return FakeLLMAdapter()
@@ -72,6 +78,13 @@ def get_llm_adapter() -> LLMAdapter:
                 if config.host != settings.ollama_base_url:
                     raise InferenceUnavailableError
                 supervisor = OllamaSupervisor(config)
+            if profile_id is not None:
+                return OllamaAdapter(
+                    base_url=settings.ollama_base_url,
+                    runtime=current_runtime(),
+                    supervisor=supervisor,
+                    manifest=get_model_profile(profile_id).manifest,
+                )
             return OllamaAdapter(
                 base_url=settings.ollama_base_url, runtime=current_runtime(), supervisor=supervisor
             )
@@ -107,6 +120,14 @@ async def initialize_llm(settings: Settings) -> None:
                 raise ValueError(message)
         try:
             with anyio.fail_after(5):
+                if settings.relevance_config_path is not None:
+                    await run_sync(
+                        partial(
+                            verify_relevance_artifacts,
+                            load_relevance_config(settings.relevance_config_path),
+                        ),
+                        abandon_on_cancel=True,
+                    )
                 if (
                     supervisor is not None
                     and await run_sync(supervisor.status, abandon_on_cancel=True) != "ready"

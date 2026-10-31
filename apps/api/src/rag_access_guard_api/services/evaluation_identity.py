@@ -6,6 +6,7 @@ from hashlib import sha256
 from rag_access_guard_api.config import Settings
 from rag_access_guard_api.schemas.evaluation_identity import EvaluationMetadata
 from rag_access_guard_api.schemas.generation import InferenceUnavailableError
+from rag_access_guard_api.schemas.relevance_config import RelevanceConfig
 from rag_access_guard_api.schemas.retrieval_config import load_retrieval_config
 from rag_access_guard_api.schemas.system import SystemStatus
 from rag_access_guard_api.services.model_profiles import ModelProfile, get_model_profile
@@ -25,6 +26,11 @@ def profile_hash(profile: ModelProfile) -> str:
             profile.render(user_input="", system_supplied_context="").encode()
         ).hexdigest(),
     }
+    if profile.profile_id == "qwen25-extractive-small-demo-v3":
+        payload["relevance_config"] = RelevanceConfig.computed_hash()
+        payload["sufficient_profile"] = profile_hash(
+            get_model_profile("qwen25-extractive-small-demo-v2")
+        )
     return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
